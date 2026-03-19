@@ -1,0 +1,10 @@
+strands-agents
+strands-agents-bedrock
+felt-python
+wherobots-python
+geopandas
+pandas
+shapely
+requests
+python-dotenv
+pyarrow
