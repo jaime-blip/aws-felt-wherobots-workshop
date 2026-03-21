@@ -1,0 +1,11 @@
+{
+  "prompt": "Style my layer splitting temperature into 6 equal intervals.",
+  "output_type": "FSL",
+  "criteria": [
+    "Must use 'equal-intervals' (not 'equal') as the steps.type value",
+    "Must have steps.count set to 6",
+    "Must be type 'numeric' with numericAttribute set to 'temperature'",
+    "Must include paint.color using a numeric sequential palette (`@galaxy`,`@ylRed`,`@ylGrn`,`@purpYl`,`@pinkYl`,`@lightning`,`@copper`,`@spruce`,`@riverine`,`@neptune`,`@violet`,`@purple`)",
+    "Must use strokeColor: 'auto'"
+  ]
+}

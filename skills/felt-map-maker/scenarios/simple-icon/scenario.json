@@ -1,0 +1,14 @@
+{
+  "prompt": "Show these landmarks using a star icon",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'simple'",
+    "Must include paint.iconImage set to 'star'",
+    "Must include paint.color property from SimplePalette HSL format (not an array)",
+    "Must include default size: 4 for points",
+    "Must include default opacity: 0.9 for points",
+    "Must include default strokeColor: 'auto' for points",
+    "Must include default strokeWidth: 1 for points"
+  ]
+}

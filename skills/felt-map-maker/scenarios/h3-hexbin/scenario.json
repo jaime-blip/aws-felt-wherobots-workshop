@@ -1,0 +1,17 @@
+{
+  "prompt": "Aggregate sales data into hexagonal bins showing total sales per hex",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'h3'",
+    "Must include config.numericAttribute set to 'sales'",
+    "Must include config.aggregation set to 'sum'",
+    "Must include config.baseBinLevel (H3 resolution, typically 3-7 for regional data)",
+    "Must include config.binMode set to 'fixed' (default)",
+    "Must include config.steps with a classification method like {'type': 'quantiles', 'count': 5}",
+    "Must include paint.color with a sequential palette shortcut (like @copper, @riverine, @galaxy, @neptune, @ylRed)",
+    "Must include default paint.opacity: 0.9",
+    "Must include default paint.strokeColor: 'auto'",
+    "Must include default paint.strokeWidth: 1"
+  ]
+}

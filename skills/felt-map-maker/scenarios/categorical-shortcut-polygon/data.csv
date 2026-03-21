@@ -1,0 +1,7 @@
+id,name,zone_type,area_sqkm
+1,District A,residential,12.5
+2,District B,commercial,8.3
+3,District C,industrial,15.7
+4,District D,mixed-use,10.2
+5,District E,residential,9.8
+6,District F,park,5.4

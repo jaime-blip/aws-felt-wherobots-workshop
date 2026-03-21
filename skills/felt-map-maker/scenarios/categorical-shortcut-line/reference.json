@@ -1,0 +1,14 @@
+{
+  "version": "2.3.1",
+  "type": "categorical",
+  "config": {
+    "categoricalAttribute": "road_type",
+    "categories": {"type": "top", "count": 5},
+    "showOther": true
+  },
+  "paint": {
+    "color": "@catPalette4",
+    "size": 2,
+    "opacity": 1.0
+  }
+}

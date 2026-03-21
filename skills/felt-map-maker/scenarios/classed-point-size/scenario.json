@@ -1,0 +1,13 @@
+{
+  "prompt": "Show population using 5 size classes",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'numeric'",
+    "Must include config.numericAttribute set to 'population'",
+    "Must include config.steps with a discrete classification method like {'type': 'quantiles', 'count': 5} or {'type': 'jenks', 'count': 5} (NOT continuous)",
+    "paint.size must be an array [min, max] for size scaling across the 5 discrete classes",
+    "paint.color should be a single color value (not an array, since only size varies by class)",
+    "Should include reasonable point defaults (opacity, strokeColor, strokeWidth as appropriate for points)"
+  ]
+}

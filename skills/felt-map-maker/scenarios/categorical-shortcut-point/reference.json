@@ -1,0 +1,16 @@
+{
+  "version": "2.3.1",
+  "type": "categorical",
+  "config": {
+    "categoricalAttribute": "land_use",
+    "categories": {"type": "top", "count": 10},
+    "showOther": true
+  },
+  "paint": {
+    "color": "@catPalette4",
+    "size": 4,
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

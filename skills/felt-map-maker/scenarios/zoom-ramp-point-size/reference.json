@@ -1,0 +1,11 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "paint": {
+    "color": "hsl(161,30%,45%)",
+    "size": {"linear": [[5, 4], [15, 12]]},
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

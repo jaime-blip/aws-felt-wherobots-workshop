@@ -1,0 +1,11 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "paint": {
+    "color": "hsl(61,40%,45%)",
+    "size": 2,
+    "opacity": 1.0,
+    "lineCap": "round",
+    "lineJoin": "round"
+  }
+}

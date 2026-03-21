@@ -1,0 +1,11 @@
+id,time,latitude,longitude,mag,depth,place,type
+nc73917310,2026-01-15T08:23:45.120Z,37.8156,-122.2453,2.4,8.9,San Francisco Bay area,earthquake
+ci40567890,2026-01-14T14:56:12.340Z,34.0522,-118.2437,3.1,12.3,Los Angeles area,earthquake
+us7000m1a2,2026-01-13T22:17:33.560Z,35.6762,139.6503,4.8,35.0,Tokyo region,earthquake
+ak0234567,2026-01-12T05:42:18.780Z,61.2181,-149.9003,5.2,45.6,Alaska Peninsula,earthquake
+pr71234567,2026-01-11T19:08:54.910Z,18.2208,-66.5901,3.7,10.0,Puerto Rico region,earthquake
+uw61987654,2026-01-10T11:34:27.120Z,47.6062,-122.3321,2.8,15.2,Seattle area,earthquake
+hv72345678,2026-01-09T03:15:09.340Z,19.4326,-155.2908,4.2,8.5,Hawaii region,earthquake
+nn00456789,2026-01-08T16:48:41.560Z,39.5296,-119.8138,3.5,6.7,Nevada region,earthquake
+mb80123456,2026-01-07T09:27:15.780Z,44.9778,-93.2650,2.1,5.0,Minnesota region,earthquake
+ci40678901,2026-01-06T21:53:38.910Z,33.9425,-117.2297,2.9,11.4,Southern California,earthquake

@@ -1,0 +1,15 @@
+{
+  "prompt": "Style by land use type with these custom legend labels: 'park' should display as 'Parks & Recreation', 'water' as 'Water Bodies', 'residential' as 'Residential Areas'",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'categorical'",
+    "Must include config.categoricalAttribute",
+    "Must include legend block with displayName",
+    "Legend displayName must be an object mapping category values to labels",
+    "Must map 'park' to 'Parks & Recreation'",
+    "Must map 'water' to 'Water Bodies'",
+    "Must map 'residential' to 'Residential Areas'",
+    "Must include paint.color property"
+  ]
+}

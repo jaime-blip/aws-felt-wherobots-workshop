@@ -1,0 +1,14 @@
+{
+  "prompt": "Style these county polygons and configure popups to show the county name as the title and display population, state, and area in the popup details",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must include popup block",
+    "Must include popup.titleAttribute set to a name/county field",
+    "Must include popup.keyAttributes as an array",
+    "keyAttributes array must include population, state, and area fields",
+    "Must include paint.color property",
+    "Must include valid paint properties for polygon geometry (no size property)",
+    "Must include paint.strokeColor and paint.strokeWidth"
+  ]
+}

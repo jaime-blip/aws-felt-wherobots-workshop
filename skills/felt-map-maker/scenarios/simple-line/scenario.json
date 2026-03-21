@@ -1,0 +1,13 @@
+{
+  "prompt": "Style these roads as simple lines",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'simple'",
+    "Must include paint.color property (never omit it)",
+    "Color must be from SimplePalette (HSL format like 'hsl(61,40%,45%)') or a reasonable single color - NOT an array of colors",
+    "Must use default size: 2 (not 3, not 4, not any other value)",
+    "Must use default opacity: 1.0",
+    "Should use default lineCap and lineJoin: 'round'"
+  ]
+}

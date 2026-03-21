@@ -1,0 +1,15 @@
+{
+  "version": "2.3.1",
+  "type": "numeric",
+  "config": {
+    "numericAttribute": "temperature",
+    "steps": {
+      "type": "equal-intervals",
+      "count": 6
+    }
+  },
+  "paint": {
+    "color": "@galaxy",
+    "strokeColor": "auto"
+  }
+}

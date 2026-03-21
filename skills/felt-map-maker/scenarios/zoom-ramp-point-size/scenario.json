@@ -1,0 +1,14 @@
+{
+  "prompt": "Style these city points so they increase in size as you zoom in - size 5 at zoom level 5, size 10 at zoom level 15",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'simple'",
+    "Must include paint.color property in SimplePalette HSL format",
+    "Must use zoom ramping for size property",
+    "Size array must have 2 stops",
+    "Must include paint.opacity: 0.9 (default)",
+    "Must include strokeColor: 'auto' (default)",
+    "Must include strokeWidth: 1 (default)"
+  ]
+}

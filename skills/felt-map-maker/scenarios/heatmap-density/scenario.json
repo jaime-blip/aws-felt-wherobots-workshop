@@ -1,0 +1,13 @@
+{
+  "prompt": "Show the density of these incident points as a heatmap",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'heatmap' (not 'numeric' or 'simple')",
+    "Must include empty config: {} (heatmaps don't use attributes)",
+    "Must include paint.color property using a heatmap palette (@redOrHeat, @purpYlPink, @lightningHeat)",
+    "Must include paint.size property (default radius: 10)",
+    "Must include paint.intensity property (default: 0.5)",
+    "Must include paint.opacity property (default: 0.9)"
+  ]
+}

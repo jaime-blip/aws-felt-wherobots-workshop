@@ -1,0 +1,11 @@
+{
+  "prompt": "Style my layer showing population by quantiles with 5 classes.",
+  "output_type": "FSL",
+  "criteria": [
+    "Must use 'quantiles' (not 'quantile') as the steps.type value",
+    "Must have steps.count set to 5",
+    "Must be type 'numeric' with numericAttribute set to 'population'",
+    "Must include paint.color using a numeric sequential palette (`@galaxy`,`@ylRed`,`@ylGrn`,`@purpYl`,`@pinkYl`,`@lightning`,`@copper`,`@spruce`,`@riverine`,`@neptune`,`@violet`,`@purple`)",
+    "Must use strokeColor: 'auto'"
+  ]
+}

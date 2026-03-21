@@ -1,0 +1,16 @@
+{
+  "prompt": "Show these cities as points with labels that appear at zoom level 8",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'simple'",
+    "Must include paint.color from SimplePalette HSL format",
+    "Must include paint defaults: size: 4, opacity: 0.9, strokeColor: 'auto', strokeWidth: 1",
+    "Must include config.labelAttribute set to ['name'] or ['city_name'] or similar",
+    "Must include label.minZoom set to 8",
+    "Must include label.color set to 'auto' (default)",
+    "Must include label.haloColor set to 'auto' (default)",
+    "Must include label.fontSize (default: 13)",
+    "Must include label.haloWidth (default: 1)"
+  ]
+}

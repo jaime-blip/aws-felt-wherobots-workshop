@@ -1,0 +1,34 @@
+{
+  "map_id": "map-test123",
+  "map_name": "Test Map",
+  "map_url": "https://felt.com/map/test-map-test123",
+  "layers": [
+    {
+      "layer_id": "layer-abc789",
+      "layer_name": "Data Layer",
+      "status": "completed",
+      "attributes": [
+        {"name": "id", "type": "INTEGER"},
+        {"name": "name", "type": "TEXT"},
+        {"name": "value", "type": "REAL"}
+      ],
+      "style": {
+        "version": "2.3.1",
+        "type": "simple",
+        "paint": {
+          "color": "#808080",
+          "opacity": 0.75,
+          "size": 8,
+          "stroke": "#333333",
+          "strokeWidth": 1.5,
+          "strokeOpacity": 0.9
+        },
+        "label": {
+          "text": ["name"],
+          "placement": "point",
+          "offset": [0, 2]
+        }
+      }
+    }
+  ]
+}

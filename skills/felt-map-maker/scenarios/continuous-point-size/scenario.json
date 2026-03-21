@@ -1,0 +1,13 @@
+{
+  "prompt": "Show population using proportional symbols",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'numeric'",
+    "Must include config.numericAttribute set to 'population'",
+    "Must include config.steps with {\"type\": \"continuous\"} for unclassed/continuous variation",
+    "paint.size must be an array [min, max] for proportional symbol scaling (not a single value)",
+    "paint.color should be a single color value (not an array, since unclassed)",
+    "Should include reasonable point defaults (opacity, strokeColor, strokeWidth as appropriate for points)"
+  ]
+}

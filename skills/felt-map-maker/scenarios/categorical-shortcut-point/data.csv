@@ -1,0 +1,11 @@
+id,land_use,area_sqm
+1,residential,5000
+2,commercial,12000
+3,park,8500
+4,industrial,15000
+5,residential,6200
+6,water,3000
+7,commercial,9800
+8,forest,20000
+9,agricultural,50000
+10,residential,4500

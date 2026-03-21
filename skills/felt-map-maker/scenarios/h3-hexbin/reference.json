@@ -1,0 +1,17 @@
+{
+  "version": "2.3.1",
+  "type": "h3",
+  "config": {
+    "numericAttribute": "sales",
+    "aggregation": "sum",
+    "baseBinLevel": 3,
+    "binMode": "fixed",
+    "steps": {"type": "quantiles", "count": 5}
+  },
+  "paint": {
+    "color": "@copper",
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

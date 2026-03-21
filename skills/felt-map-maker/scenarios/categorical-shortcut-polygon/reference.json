@@ -1,0 +1,14 @@
+{
+  "version": "2.3.1",
+  "type": "categorical",
+  "config": {
+    "categoricalAttribute": "zone_type",
+    "categories": {"type": "top", "count": 10},
+    "showOther": true
+  },
+  "paint": {
+    "color": "@catPalette4",
+    "strokeWidth": 1,
+    "opacity": 0.8
+  }
+}

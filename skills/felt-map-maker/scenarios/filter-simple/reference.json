@@ -1,0 +1,12 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "filters": ["population", "gt", 100000],
+  "paint": {
+    "color": "hsl(161,30%,45%)",
+    "size": 4,
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

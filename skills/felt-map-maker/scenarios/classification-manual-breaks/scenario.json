@@ -1,0 +1,15 @@
+{
+  "prompt": "Style these features by value using these specific break points: 0, 100, 500, 1000, 5000",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'numeric'",
+    "Must include config.numericAttribute",
+    "Must use explicit breaks array: [0, 100, 500, 1000, 5000]",
+    "Must include paint.color as explicit array with exactly 4 colors (N breaks = N-1 classes)",
+    "Color must be an array of hex codes, not a palette shortcut",
+    "Must include paint.opacity (default for geometry type)",
+    "Must include paint.strokeColor: 'auto' (default)",
+    "Must include paint.strokeWidth: 1 (default)"
+  ]
+}

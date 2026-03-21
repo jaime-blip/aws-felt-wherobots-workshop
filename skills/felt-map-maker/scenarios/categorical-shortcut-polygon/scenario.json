@@ -1,0 +1,16 @@
+{
+  "prompt": "Style these districts by zone type",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'categorical'",
+    "Must include config.categoricalAttribute set to 'zone_type'",
+    "Must use categories shortcut: {\"type\": \"top\", \"count\": 10} (default when no count specified, not an explicit array)",
+    "Must include paint.color property (never omit it)",
+    "Color must be a categorical palette like '@catPalette4' (not an array, not SimplePalette HSL)",
+    "Must NOT include paint.size property (polygons don't have size)",
+    "Must use default opacity: 0.8 for polygons",
+    "Should use default strokeWidth: 1 (if included)",
+    "ShowOther must be true"
+  ]
+}

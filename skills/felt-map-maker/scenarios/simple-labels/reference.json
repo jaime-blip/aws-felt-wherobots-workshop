@@ -1,0 +1,21 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "config": {
+    "labelAttribute": ["name"]
+  },
+  "paint": {
+    "color": "hsl(161,30%,45%)",
+    "size": 4,
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  },
+  "label": {
+    "minZoom": 8,
+    "color": "auto",
+    "haloColor": "auto",
+    "fontSize": 13,
+    "haloWidth": 1
+  }
+}

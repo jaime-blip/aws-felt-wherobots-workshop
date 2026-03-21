@@ -1,0 +1,11 @@
+{
+  "prompt": "Show only cities with population greater than 100,000",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must include filters block at root level",
+    "Filter must use correct syntax: [\"population\", \"gt\", 100000]",
+    "Must include valid paint properties for the geometry type",
+    "Must include paint.color property (never omit it)"
+  ]
+}

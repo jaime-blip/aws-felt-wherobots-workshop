@@ -1,0 +1,15 @@
+{
+  "prompt": "Style these points by land use type, showing the top 10 categories",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'categorical'",
+    "Must include config.categoricalAttribute set to 'land_use'",
+    "Must use categories shortcut: {\"type\": \"top\", \"count\": 10} (not an explicit array)",
+    "Must include paint.color property (never omit it)",
+    "Color must be a categorical palette like '@catPalette4' (not an array, not SimplePalette HSL)",
+    "Must use default size: 4 for points",
+    "Must use default opacity: 0.9 for points",
+    "ShowOther must be true"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "prompt": "Change the layer color to blue",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must write FSL that includes paint.color set to blue (hex code or palette)",
+    "Should retain other existing style properties from the context (like opacity, size, version, type)",
+    "Must call update_layer_style() with map_id and layer_id from context",
+    "Must call update_layer_style() with the complete FSL style"
+  ]
+}

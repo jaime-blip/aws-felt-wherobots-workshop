@@ -1,0 +1,10 @@
+{
+  "prompt": "Create a map with earthquake data from the last month styled by magnitude",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map() to create a new map",
+    "Must call upload_url() with an earthquake data URL (e.g., USGS GeoJSON feed)",
+    "Must call update_layer_style() with FSL styling",
+    "FSL style must be type 'numeric' with numericAttribute referencing magnitude (e.g., 'mag' or 'magnitude')"
+  ]
+}

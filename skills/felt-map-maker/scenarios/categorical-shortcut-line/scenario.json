@@ -1,0 +1,15 @@
+{
+  "prompt": "Style these roads by road type, showing the top 5 types",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'categorical'",
+    "Must include config.categoricalAttribute set to 'road_type'",
+    "Must use categories shortcut: {\"type\": \"top\", \"count\": 5} (not an explicit array)",
+    "Must include paint.color property (never omit it)",
+    "Color must be a categorical palette like '@catPalette4' (not an array, not SimplePalette HSL)",
+    "Must use default size: 2 for lines",
+    "Must use default opacity: 1.0 for lines",
+    "ShowOther must be true"
+  ]
+}

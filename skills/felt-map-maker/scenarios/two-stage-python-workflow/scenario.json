@@ -1,0 +1,12 @@
+{
+  "prompt": "Create a map with data from a URL and style it.",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map() to create a new map",
+    "Must call upload_url() to upload data from a URL",
+    "Must call skill.wait_for_layer_processing() to wait for layer to complete processing",
+    "Must call skill.inspect_created_map() to inspect the map (this outputs IDs and writes context.json automatically)",
+    "Must include a comment that marks the separation between Stage 1 (creation) and Stage 2 (styling)",
+    "Must call update_layer_style() with FSL styling"
+  ]
+}

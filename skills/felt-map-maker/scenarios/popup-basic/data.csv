@@ -1,0 +1,6 @@
+county_name,population,state,area,geometry
+San Francisco County,873965,California,121.4,"POLYGON((-122.5 37.7, -122.3 37.7, -122.3 37.8, -122.5 37.8, -122.5 37.7))"
+Alameda County,1671329,California,821.2,"POLYGON((-122.4 37.6, -122.0 37.6, -122.0 37.9, -122.4 37.9, -122.4 37.6))"
+Santa Clara County,1936259,California,1304.3,"POLYGON((-122.2 37.2, -121.7 37.2, -121.7 37.5, -122.2 37.5, -122.2 37.2))"
+Contra Costa County,1153526,California,804.5,"POLYGON((-122.4 37.8, -121.9 37.8, -121.9 38.1, -122.4 38.1, -122.4 37.8))"
+San Mateo County,766573,California,741.1,"POLYGON((-122.6 37.4, -122.1 37.4, -122.1 37.7, -122.6 37.7, -122.6 37.4))"

@@ -1,0 +1,13 @@
+{
+  "prompt": "Style these points as simple circles",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'simple'",
+    "Must include paint.color property (never omit it)",
+    "Color must be from SimplePalette (HSL format like 'hsl(161,30%,45%)') or a reasonable single color - NOT an array of colors",
+    "Must use default size: 4 (not 8, not 10, not any other value)",
+    "Must use default opacity: 0.9",
+    "Must use strokeColor: 'auto'"
+  ]
+}

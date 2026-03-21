@@ -1,0 +1,6 @@
+id,name,facility_type,geometry
+1,Retail Store,building,POINT(-122.4194 37.7749)
+2,River,water,POINT(-122.4094 37.7849)
+3,Central Park,park,POINT(-122.4294 37.7649)
+4,Office Building,building,POINT(-122.4394 37.7549)
+5,Restaurant,building,POINT(-122.4494 37.7449)

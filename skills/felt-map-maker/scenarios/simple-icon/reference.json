@@ -1,0 +1,12 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "paint": {
+    "iconImage": "star",
+    "color": "hsl(45,100%,50%)",
+    "size": 4,
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

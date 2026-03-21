@@ -1,0 +1,15 @@
+{
+  "version": "2.3.1",
+  "type": "numeric",
+  "config": {
+    "numericAttribute": "population",
+    "steps": {"type": "quantiles", "count": 5}
+  },
+  "paint": {
+    "size": [4, 20],
+    "color": "hsl(161,30%,45%)",
+    "opacity": 0.9,
+    "strokeColor": "auto",
+    "strokeWidth": 1
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "prompt": "Style these points by facility type, showing only park, water, and building categories",
+  "output_type": "FSL",
+  "criteria": [
+    "Must include version '2.3.1'",
+    "Must use type 'categorical'",
+    "Must include config.categoricalAttribute set to 'facility_type'",
+    "config.categories must be an array of strings (NOT a shortcut object like {\"type\": \"top\"})",
+    "categories array must include exactly: [\"park\", \"water\", \"building\"] in any order",
+    "paint.color must be a categorical palette shortcut like '@catPalette4' (NOT an explicit color array)",
+    "Must use default size: 4 for points",
+    "Must use default opacity: 0.9 for points",
+    "Must include showOther: true (to show data values not in explicit list as 'Other')",
+    "legend.displayName must be an object with category keys mapped to human-readable names"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": "2.3.1",
+  "type": "simple",
+  "paint": {
+    "color": "hsl(161,30%,45%)",
+    "opacity": 0.8,
+    "strokeColor": "auto",
+    "strokeWidth": 1,
+    "isSandwiched": false
+  },
+  "popup": {
+    "titleAttribute": "county_name",
+    "keyAttributes": ["population", "state", "area"]
+  }
+}
