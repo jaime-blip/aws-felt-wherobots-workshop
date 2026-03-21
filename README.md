@@ -2,59 +2,56 @@
 
 **Agentic GIS: From Satellite Data to Interactive Maps with AI**
 
-A hands-on workshop combining Wherobots (spatial data engineering), Aurora weather forecasting, and Felt (AI-native mapping) — all orchestrated by an AI agent built with AWS Strands Agents SDK.
+A hands-on workshop combining Wherobots MCP (agentic data engineering), Amazon Aurora PostgreSQL/PostGIS (spatial database), and Felt MCP (AI-native mapping) — all orchestrated by AI agents built with AWS Strands SDK.
 
 ## Workshop Structure
 
-### Half 1: Data Engineering with Wherobots (45 min)
-Wrangle MODIS satellite imagery and earth observation datasets for climate risk analysis.
+### Part 1 — Agentic Data Engineering (Wherobots MCP) ⏱️ 45 min
+Full AI development experience: an agent-driven data pipeline using the medallion architecture.
 
 | Step | Script | Description |
 |------|--------|-------------|
-| 1 | `notebooks/01_wherobots_setup.py` | Connect to Wherobots Cloud (Apache Sedona) |
-| 2 | `notebooks/02_load_modis.py` | Load MODIS satellite flood data |
-| 3 | `notebooks/03_load_datasets.py` | Load NOAA storms, USFS wildfire, Overture buildings |
-| 4 | `notebooks/04_process_enrich.py` | Spatial joins & composite risk scoring |
-| 5 | `notebooks/05_export_results.py` | Export enriched data for the agent |
+| 1 | `notebooks/01_setup.py` | Connect to Wherobots Cloud + explore catalog |
+| 2 | `notebooks/02_bronze.py` | **Bronze**: Ingest raw MODIS, NOAA storms, USFS wildfire |
+| 3 | `notebooks/03_silver.py` | **Silver**: Clean, normalize, spatial joins |
+| 4 | `notebooks/04_gold.py` | **Gold**: Composite risk scoring per building |
+| 5 | `notebooks/05_export_aurora.py` | JDBC export gold layer → Amazon Aurora PostgreSQL |
 
-### Half 2: Building a Strands Agent (45 min)
-Build an AI agent that calls weather models and publishes to Felt maps.
+### Part 2 — Map Builder AI Agent (Aurora + Felt MCP) ⏱️ 45 min
+Build a Strands agent that queries Aurora and creates Felt maps.
 
 | Step | Script | Description |
 |------|--------|-------------|
-| 6 | `tools/aurora_tools.py` | Weather forecasting tools (Open-Meteo + Aurora) |
-| 7 | `tools/felt_tools.py` | Felt MCP tools for map creation & styling |
-| 8 | `agent/climate_agent.py` | The Strands Agent combining all tools |
-| 9 | `main.py` | Demo CLI — natural language → risk maps |
+| 6 | `tools/felt_tools.py` | Felt MCP tools + skills for map creation & styling |
+| 7 | `tools/aurora_tools.py` | Aurora PostGIS query tools + spatial filtering |
+| 8 | `agent/map_agent.py` | Strands agent wiring Aurora + Felt tools |
+| 9 | `main.py` | Demo: "Show wildfire risk for Austin buildings" → Felt map URL |
 
 ## Architecture
 
 ```
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────┐
-│  Earth Obs Data  │     │  Wherobots Cloud │     │    Felt      │
-│                  │     │  (Apache Sedona) │     │  (Maps API)  │
-│ MODIS Flood      │────▶│                  │────▶│              │
-│ NOAA Storms      │     │  Spatial SQL     │     │  Interactive │
-│ USFS Wildfire    │     │  Raster Ops      │     │  Risk Maps   │
-│ Overture Bldgs   │     │  Risk Scoring    │     │              │
-└──────────────────┘     └──────────────────┘     └──────────────┘
-                                │                        ▲
-                       ┌────────▼────────┐               │
-                       │  Strands Agent  │───────────────┘
-                       │  (Claude on     │
-                       │   Bedrock)      │
-                       │                 │
-                       │  Tools:         │
-                       │  • Wherobots    │
-                       │  • Aurora/Wx    │
-                       │  • Felt MCP     │
-                       └─────────────────┘
+         Part 1: Agentic Data Engineering              Part 2: Map Builder Agent
+    ┌─────────────────────────────────────────┐    ┌───────────────────────────────┐
+    │                                         │    │                               │
+    │  ┌──────────┐   Wherobots MCP           │    │   Strands Agent (Bedrock)     │
+    │  │ MODIS    │──┐  (Apache Sedona)       │    │         │                     │
+    │  │ NOAA     │──┤                        │    │    ┌────┴────┐                │
+    │  │ USFS     │──┤  ┌───────┐  ┌───────┐ │    │    │         │                │
+    │  │ Overture │──┘  │Bronze │→ │Silver │ │    │  Aurora    Felt               │
+    │  └──────────┘     │ raw   │  │ clean │ │    │  PostGIS   MCP               │
+    │                   └───────┘  └───┬───┘ │    │  Tools     Tools             │
+    │                              ┌───▼───┐ │    │    │         │                │
+    │                              │ Gold  │ │    │    ▼         ▼                │
+    │                              │ scored│─┼────┼→ Aurora   Felt Map            │
+    │                              └───────┘ │    │  (PostGIS)  URL              │
+    │                                JDBC    │    │                               │
+    └─────────────────────────────────────────┘    └───────────────────────────────┘
 ```
 
 ## Prerequisites
 
 - Python 3.10+
-- AWS account with Bedrock access (Claude Sonnet)
+- AWS account with Bedrock access (Claude Sonnet) + Aurora PostgreSQL cluster
 - Wherobots Cloud account (cloud.wherobots.com)
 - Felt account + API token (felt.com/account/integrations)
 
@@ -72,20 +69,19 @@ cp .env.example .env
 ## Quick Demo
 
 ```bash
-# Run the agent
-python main.py "Show me wildfire risk for buildings in LA county"
-python main.py "What's the flood risk in Houston with this week's forecast?"
-python main.py "Create a climate risk map of Miami-Dade county"
+python main.py "Show wildfire risk for buildings in Austin"
+python main.py "Map flood risk in Houston with critical buildings highlighted"
+python main.py "Which Miami buildings have composite risk above 0.7?"
 ```
 
 ## Stack
 
 - **[AWS Strands Agents SDK](https://github.com/strands-agents/sdk-python)** — Agent framework
 - **[Amazon Bedrock](https://aws.amazon.com/bedrock/)** — Claude Sonnet LLM
-- **[Wherobots Cloud](https://wherobots.com)** — Spatial data processing (Apache Sedona)
-- **[Aurora](https://www.microsoft.com/en-us/research/publication/aurora-a-foundation-model-of-the-atmosphere/)** — Weather foundation model (1.3B params)
+- **[Amazon Aurora PostgreSQL](https://aws.amazon.com/rds/aurora/)** — Spatial database (PostGIS)
+- **[Wherobots Cloud](https://wherobots.com)** — Spatial data engineering (Apache Sedona)
 - **[Felt](https://felt.com)** — AI-native collaborative maps
-- **[Open-Meteo](https://open-meteo.com)** — Free weather API
+- **[Felt MCP](https://github.com/feltlabs/felt-mcp)** — MCP server for Felt
 
 ## Partners
 

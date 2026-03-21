@@ -8,3 +8,6 @@ shapely
 requests
 python-dotenv
 pyarrow
+psycopg2-binary
+sqlalchemy
+geoalchemy2

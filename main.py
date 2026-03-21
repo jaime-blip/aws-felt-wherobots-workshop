@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-AWS Geospatial AI Workshop — Demo CLI
-=======================================
+AWS Geospatial AI Workshop — Map Builder Agent
+================================================
 
-Natural language interface to the climate risk agent.
-Ask it about flood risk, wildfire exposure, weather forecasts,
-and it'll analyze the data and create interactive Felt maps.
+Natural language → Aurora PostGIS query → Felt map.
 
 Usage:
-    python main.py "Show me wildfire risk for buildings in LA"
-    python main.py "What's the flood risk in Houston with this week's forecast?"
-    python main.py "Create a climate risk map of Miami"
+    python main.py "Show wildfire risk for buildings in Austin"
+    python main.py "Map flood risk in Houston, highlight critical buildings"
+    python main.py "Which Miami buildings have composite risk above 0.7?"
     python main.py   # interactive mode
 """
 
@@ -24,32 +22,28 @@ load_dotenv()
 
 
 def check_env():
-    """Check required environment variables."""
-    missing = []
+    """Validate required environment variables."""
     if not os.environ.get("FELT_API_TOKEN"):
-        missing.append("FELT_API_TOKEN")
-    if not os.environ.get("AWS_DEFAULT_REGION") and not os.environ.get("AWS_PROFILE"):
-        missing.append("AWS credentials (AWS_PROFILE or AWS_ACCESS_KEY_ID)")
-
-    # Wherobots is optional (agent can work without it using pre-computed data)
-    if not os.environ.get("WHEROBOTS_API_KEY"):
-        print("⚠️  WHEROBOTS_API_KEY not set — Wherobots live queries disabled.")
-        print("   Pre-computed risk data (Houston/LA/Miami) is still available.\n")
-
-    if missing:
-        print("❌ Missing required environment variables:")
-        for var in missing:
-            print(f"   • {var}")
-        print("\nCopy .env.example to .env and fill in your credentials.")
+        print("❌ FELT_API_TOKEN not set. Get one at felt.com/account/integrations")
         sys.exit(1)
+
+    if not os.environ.get("AWS_DEFAULT_REGION") and not os.environ.get("AWS_PROFILE"):
+        print("❌ AWS credentials not configured (needed for Bedrock).")
+        sys.exit(1)
+
+    if not os.environ.get("AURORA_PASSWORD"):
+        print("⚠️  AURORA_PASSWORD not set — using local GeoJSON fallback instead of Aurora.")
+        print("   Run notebooks/05_export_aurora.py to generate local data.\n")
 
 
 def ensure_data():
-    """Ensure sample data exists."""
-    data_path = Path(__file__).parent / "data" / "risk_scored_buildings.geojson"
+    """Make sure sample data exists (for fallback mode)."""
+    data_path = Path(__file__).parent / "data" / "gold_building_risk.geojson"
     if not data_path.exists():
-        print("📦 Generating sample risk data (first run)...")
-        exec(open(Path(__file__).parent / "notebooks" / "05_export_results.py").read())
+        print("📦 Generating sample risk data...")
+        # Run the export script to create local data
+        import subprocess
+        subprocess.run([sys.executable, str(Path(__file__).parent / "notebooks" / "05_export_aurora.py")], check=True)
         print()
 
 
@@ -57,28 +51,25 @@ def main():
     check_env()
     ensure_data()
 
-    # Get prompt
     if len(sys.argv) > 1:
         prompt = " ".join(sys.argv[1:])
     else:
-        print("🌍 Climate Risk Agent")
+        print("🗺️  Map Builder Agent")
         print("=" * 50)
-        print("Ask about climate risks for any location.")
-        print()
+        print("Query building risk data and create Felt maps.\n")
         print("Examples:")
-        print('  • "Show me wildfire risk for buildings in LA"')
-        print('  • "What\'s the flood risk in Houston?"')
-        print('  • "Create a climate risk map of Miami with weather forecast"')
-        print('  • "What\'s the weather outlook for 29.76, -95.37?"')
+        print('  • "Show wildfire risk for buildings in Austin"')
+        print('  • "Map flood risk in Houston"')
+        print('  • "Create a risk map of Miami critical buildings"')
+        print('  • "Which LA buildings have the highest composite risk?"')
         print()
         prompt = input("🔍 > ").strip()
         if not prompt:
-            print("No prompt. Exiting.")
             sys.exit(0)
 
-    print(f"\n🤖 Analyzing: {prompt}\n")
+    print(f"\n🤖 Processing: {prompt}\n")
 
-    from agent.climate_agent import create_agent
+    from agent.map_agent import create_agent
 
     agent = create_agent()
     result = agent(prompt)
