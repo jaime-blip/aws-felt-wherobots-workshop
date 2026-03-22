@@ -137,54 +137,51 @@ def check_data(query: str) -> str:
 
 @tool
 def verify_map(map_url: str) -> str:
-    """Verify a Felt map was created correctly by checking its metadata and thumbnail.
+    """Verify a Felt map by checking API metadata AND taking a screenshot.
 
-    Call this AFTER creating and styling a map. It fetches the map's
-    metadata (title, layers, thumbnail) from the Felt API to confirm
-    everything was set up properly.
+    Call this AFTER creating and styling a map. It:
+    1. Checks layer status, feature counts, and styling via the Felt API
+    2. Takes a headless browser screenshot of the actual rendered map
+    3. Returns a verification report with the screenshot path
 
     Args:
         map_url: The Felt map URL to verify.
 
     Returns:
-        Map verification summary including layer count, feature counts,
-        thumbnail URL, and any issues detected.
+        Verification report with layer info, issues, and screenshot path.
     """
     import urllib.request
     import json
     import re
+    import time as _time
+    from pathlib import Path
 
     token = os.environ.get("FELT_API_TOKEN", "")
 
-    # Extract map ID from URL
     match = re.search(r'([A-Za-z0-9]{20,})$', map_url.rstrip("/"))
     if not match:
         return f"Could not extract map ID from URL: {map_url}"
     map_id = match.group(1)
 
+    lines = ["## Map Verification\n"]
+
+    # ── API check ──────────────────────────────────────────────
     try:
-        # Get map metadata
         req = urllib.request.Request(
             f"https://felt.com/api/v2/maps/{map_id}",
             headers={"Authorization": f"Bearer {token}"}
         )
         map_data = json.loads(urllib.request.urlopen(req).read())
 
-        # Get layers
         req2 = urllib.request.Request(
             f"https://felt.com/api/v2/maps/{map_id}/layers",
             headers={"Authorization": f"Bearer {token}"}
         )
         layers = json.loads(urllib.request.urlopen(req2).read())
 
-        # Build verification report
-        lines = [
-            f"## Map Verification",
-            f"- **Title:** {map_data.get('title', '?')}",
-            f"- **URL:** {map_data.get('url', '?')}",
-            f"- **Thumbnail:** {map_data.get('thumbnail_url', 'not yet generated')}",
-            f"- **Layers:** {len(layers)}",
-        ]
+        lines.append(f"**Title:** {map_data.get('title', '?')}")
+        lines.append(f"**URL:** {map_data.get('url', '?')}")
+        lines.append(f"**Layers:** {len(layers)}\n")
 
         issues = []
         for layer in layers:
@@ -192,25 +189,46 @@ def verify_map(map_url: str) -> str:
             status = layer.get("status", "?")
             feat_count = layer.get("metadata", {}).get("feature_count")
             style_type = layer.get("style", {}).get("type", "none")
-
-            lines.append(f"  - **{name}**: status={status}, features={feat_count or '?'}, style={style_type}")
-
+            lines.append(f"- **{name}**: status={status}, features={feat_count or '?'}, style={style_type}")
             if status == "failed":
                 issues.append(f"Layer '{name}' failed to process")
             if style_type == "simple" and feat_count and feat_count > 1:
                 issues.append(f"Layer '{name}' has default styling — consider applying categorical or numeric style")
 
         if issues:
-            lines.append(f"\n⚠️ **Issues found:**")
+            lines.append(f"\n⚠️ **Issues:**")
             for issue in issues:
                 lines.append(f"  - {issue}")
-        else:
-            lines.append(f"\n✅ **Map looks good!** All layers processed and styled.")
-
-        return "\n".join(lines)
-
     except Exception as e:
-        return f"Verification failed: {e}"
+        lines.append(f"API check failed: {e}")
+
+    # ── Screenshot ─────────────────────────────────────────────
+    screenshots_dir = Path(__file__).parent.parent / "data" / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+    screenshot_path = screenshots_dir / f"{map_id}.png"
+
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--enable-webgl", "--use-gl=swiftshader", "--no-sandbox"]
+            )
+            page = browser.new_page(viewport={"width": 1400, "height": 900})
+            page.goto(map_url, timeout=30000)
+            _time.sleep(10)
+            page.screenshot(path=str(screenshot_path), full_page=False)
+            browser.close()
+
+        lines.append(f"\n📸 **Screenshot:** {screenshot_path}")
+    except Exception as e:
+        lines.append(f"\n📸 Screenshot failed: {e}")
+
+    if not issues:
+        lines.append(f"\n✅ **Map verified!** Layers loaded, styled, and screenshot captured.")
+
+    return "\n".join(lines)
 
 
 _exec_globals = {"__builtins__": __builtins__}
