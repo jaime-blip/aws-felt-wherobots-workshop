@@ -48,14 +48,50 @@ SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt map
 ## Rules
 - **ALWAYS call check_data first** to verify data exists before doing anything else.
 - Read skill docs before writing code. Use file_read tool.
-- Use run_python to execute code
-- ALWAYS print the Felt map URL at the end
-- **Use `SELECT *` for data layers** — don't try to discover columns via information_schema SQL queries through Felt. Just use `SELECT * FROM table_name` (with optional WHERE/LIMIT). Felt will show all columns.
-- **For styling**, use top-N categories with a palette shortcut (e.g. `categorical_style(attribute, top_n=10)`) — this auto-discovers categories without needing to know column values.
+- Use run_python to execute code. Everything is pre-imported (no imports needed).
+- ALWAYS print the Felt map URL at the end.
 - Source ID for all SQL queries: `{SOURCE_ID}`
-- Write the FULL pipeline in ONE run_python call (create map → add layer → poll for completion → style → print URL)
-- **Import helpers**: `sys.path.insert(0, '{Path(__file__).parent / "scripts"}'); from felt_helpers import wait_for_layer, categorical_style, numeric_style`
-- **NEVER create more than ONE map per request** — put discovery and data layers on the same map, or better yet skip discovery layers entirely.
+- Write the FULL pipeline in ONE run_python call.
+- **NEVER create more than ONE map per request.**
+
+## Quickstart Pattern (use this!)
+```python
+# Everything is pre-imported: create_map, add_source_layer, list_layers,
+# update_layer_style, wait_for_layer, categorical_style, numeric_style,
+# TOKEN, SOURCE_ID, os, json, time
+
+# 1. Create map
+m = create_map(title="My Map", api_token=TOKEN)
+map_id, map_url = m["id"], m["url"]
+print(f"Map: {{map_url}}")
+
+# 2. Add layer via SQL
+params = {{"from": "sql", "source_id": SOURCE_ID, "query": "SELECT * FROM public.my_table"}}
+add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+
+# 3. Wait for processing (MANDATORY before styling)
+layer = wait_for_layer(map_id)  # returns layer dict with 'id'
+layer_id = layer["id"]
+
+# 4. Style it
+style = categorical_style("my_column", top_n=10)  # or numeric_style("col")
+update_layer_style(map_id=map_id, layer_id=layer_id, style=style, api_token=TOKEN)
+
+print(f"Done: {{map_url}}")
+```
+
+## Multi-layer pattern
+For multiple layers, add them ONE AT A TIME. After each add_source_layer + wait_for_layer,
+the returned layer is the NEWEST one. Style it before adding the next layer.
+```python
+for table, col in [("table1", "col1"), ("table2", "col2")]:
+    params = {{"from": "sql", "source_id": SOURCE_ID, "query": f"SELECT * FROM {{table}}"}}
+    add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+    layer = wait_for_layer(map_id)
+    style = categorical_style(col, top_n=10)
+    update_layer_style(map_id=map_id, layer_id=layer["id"], style=style, api_token=TOKEN)
+    print(f"  Added {{table}}")
+```
 """
 
 
@@ -241,7 +277,34 @@ def verify_map(map_url: str) -> str:
     return "\n".join(lines)
 
 
-_exec_globals = {"__builtins__": __builtins__}
+import sys as _sys
+_scripts_dir = str(Path(__file__).parent / "scripts")
+if _scripts_dir not in _sys.path:
+    _sys.path.insert(0, _scripts_dir)
+
+# Pre-populate exec globals so agent code has everything ready
+import felt_python as _felt_python
+import time as _time_mod
+import json as _json_mod
+from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql
+
+_exec_globals = {
+    "__builtins__": __builtins__,
+    "os": os,
+    "json": _json_mod,
+    "time": _time_mod,
+    "felt_python": _felt_python,
+    "create_map": _felt_python.create_map,
+    "add_source_layer": _felt_python.add_source_layer,
+    "list_layers": _felt_python.list_layers,
+    "update_layer_style": _felt_python.update_layer_style,
+    "wait_for_layer": wait_for_layer,
+    "categorical_style": categorical_style,
+    "numeric_style": numeric_style,
+    "create_map_with_sql": create_map_with_sql,
+    "TOKEN": TOKEN,
+    "SOURCE_ID": SOURCE_ID,
+}
 
 
 @tool
@@ -249,8 +312,16 @@ def run_python(code: str) -> str:
     """Execute Python code and return stdout/stderr.
 
     Use this to query Aurora PostgreSQL and create Felt maps.
-    Available: psycopg2, felt_python, os, json, time.
-    Env vars: AURORA_DSN, FELT_API_TOKEN.
+
+    Pre-imported and ready to use (no import needed):
+    - os, json, time
+    - felt_python (create_map, add_source_layer, list_layers, update_layer_style)
+    - wait_for_layer(map_id, timeout_s=60) — polls until layer completes
+    - categorical_style(attribute, categories=None, colors=None, top_n=10) — builds valid FSL
+    - numeric_style(attribute, palette="@ylRed") — builds valid FSL
+    - create_map_with_sql(title, sql, style=None) — full pipeline in one call
+    - TOKEN, SOURCE_ID — already set
+
     Variables persist between calls.
 
     Args:

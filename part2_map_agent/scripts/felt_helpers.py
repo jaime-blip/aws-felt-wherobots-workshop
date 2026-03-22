@@ -24,20 +24,25 @@ SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
 
 # ── Layer Processing ──────────────────────────────────────────
 
-def wait_for_layer(map_id: str, timeout_s: int = 60, poll_interval: int = 3) -> dict:
-    """Poll until the first layer on a map finishes processing.
+def wait_for_layer(map_id: str, timeout_s: int = 90, poll_interval: int = 3, expect_count: int = None) -> dict:
+    """Poll until the newest layer on a map finishes processing.
+
+    For multi-layer maps, pass expect_count to wait until that many
+    layers are completed (e.g. if you just added layer #3, pass expect_count=3).
 
     Args:
         map_id: Felt map ID.
-        timeout_s: Max seconds to wait (default 60).
+        timeout_s: Max seconds to wait (default 90).
         poll_interval: Seconds between polls (default 3).
+        expect_count: Wait until this many layers are completed. If None,
+                      waits until no layers are in 'processing' state.
 
     Returns:
-        Layer dict with id, status, progress, metadata.
+        The most recently completed layer dict (with id, status, etc).
 
     Raises:
         TimeoutError: If layer doesn't complete in time.
-        RuntimeError: If layer processing fails.
+        RuntimeError: If any layer processing fails.
     """
     deadline = time.time() + timeout_s
     while time.time() < deadline:
@@ -45,14 +50,22 @@ def wait_for_layer(map_id: str, timeout_s: int = 60, poll_interval: int = 3) -> 
         layers = list_layers(map_id=map_id, api_token=TOKEN)
         if not layers:
             continue
-        layer = layers[0]
-        status = layer.get("status", "unknown")
-        progress = layer.get("progress", 0)
-        print(f"  Layer status: {status} ({progress}%)")
-        if status == "completed":
-            return layer
-        if status == "failed":
-            raise RuntimeError(f"Layer processing failed: {layer}")
+
+        completed = [l for l in layers if l.get("status") == "completed"]
+        processing = [l for l in layers if l.get("status") == "processing"]
+        failed = [l for l in layers if l.get("status") == "failed"]
+
+        if failed:
+            raise RuntimeError(f"Layer processing failed: {failed[0]}")
+
+        if expect_count and len(completed) >= expect_count:
+            print(f"  ✅ {len(completed)} layers completed")
+            return completed[0]  # newest is first in the list
+        elif not expect_count and not processing and completed:
+            print(f"  ✅ {len(completed)} layers completed")
+            return completed[0]
+        else:
+            print(f"  ... {len(completed)} done, {len(processing)} processing")
     raise TimeoutError(f"Layer not ready after {timeout_s}s")
 
 
