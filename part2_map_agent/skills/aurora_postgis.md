@@ -1,6 +1,6 @@
-# Aurora PostGIS Skill
+# Aurora PostGIS — Data Discovery Skill
 
-Query data from Amazon Aurora PostgreSQL (PostGIS) to understand what's available for mapping.
+How to discover and query spatial data in Amazon Aurora PostgreSQL (PostGIS).
 
 ## Connection
 
@@ -10,10 +10,13 @@ conn = psycopg2.connect(os.environ["AURORA_DSN"])
 cur = conn.cursor()
 ```
 
-## Discovering Data
+`psycopg2`, `os`, and `AURORA_DSN` are pre-loaded in your environment.
 
-### List schemas and tables with geometry:
+## Step 1: Find Spatial Tables
+
 ```python
+conn = psycopg2.connect(os.environ["AURORA_DSN"])
+cur = conn.cursor()
 cur.execute("""
     SELECT table_schema, table_name, column_name
     FROM information_schema.columns
@@ -22,67 +25,118 @@ cur.execute("""
     ORDER BY table_schema, table_name
 """)
 for schema, table, geom_col in cur.fetchall():
-    print(f"{schema}.{table} (geom: {geom_col})")
+    cur.execute(f"SELECT COUNT(*) FROM {schema}.{table}")
+    count = cur.fetchone()[0]
+    print(f"{schema}.{table} ({count} rows, geom: {geom_col})")
+conn.close()
 ```
 
-### Inspect a table's columns:
+## Step 2: Inspect Columns
+
 ```python
+conn = psycopg2.connect(os.environ["AURORA_DSN"])
+cur = conn.cursor()
 cur.execute("""
     SELECT column_name, data_type
     FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'building_risk'
+    WHERE table_schema = 'public' AND table_name = 'MY_TABLE'
     ORDER BY ordinal_position
 """)
+for col, dtype in cur.fetchall():
+    if not col.startswith("felt:"):  # skip internal columns
+        print(f"  {col}: {dtype}")
+conn.close()
 ```
 
-### Preview data:
+## Step 3: Sample Values (for styling decisions)
+
 ```python
-cur.execute("SELECT * FROM public.building_risk LIMIT 5")
+conn = psycopg2.connect(os.environ["AURORA_DSN"])
+cur = conn.cursor()
+
+# Distinct values for categorical columns
+cur.execute("SELECT DISTINCT my_column FROM public.my_table WHERE my_column IS NOT NULL LIMIT 15")
+print([r[0] for r in cur.fetchall()])
+
+# Numeric range for gradient styling
+cur.execute("SELECT MIN(my_num), MAX(my_num), AVG(my_num) FROM public.my_table")
+print(cur.fetchone())
+
+# Preview rows
+cur.execute("SELECT * FROM public.my_table LIMIT 3")
+for row in cur.fetchall():
+    print(row)
+conn.close()
 ```
 
-### Get row count:
+## Quick Discovery Script (all-in-one)
+
+Use this to get a full picture of what's available:
+
 ```python
-cur.execute("SELECT COUNT(*) FROM public.building_risk")
+import psycopg2, os
+conn = psycopg2.connect(os.environ["AURORA_DSN"])
+cur = conn.cursor()
+
+# Find all spatial tables
+cur.execute("""
+    SELECT c.table_schema, c.table_name, c.column_name, c.data_type
+    FROM information_schema.columns c
+    JOIN (
+        SELECT table_schema, table_name
+        FROM information_schema.columns WHERE udt_name = 'geometry'
+    ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
+    WHERE c.table_schema = 'public'
+      AND c.table_name NOT IN ('geometry_columns','geography_columns','spatial_ref_sys','raster_columns','raster_overviews')
+    ORDER BY c.table_schema, c.table_name, c.ordinal_position
+""")
+
+tables = {}
+for schema, table, col, dtype in cur.fetchall():
+    key = f"{schema}.{table}"
+    if key not in tables:
+        tables[key] = {"cols": [], "geom": None}
+    if dtype == "USER-DEFINED":
+        tables[key]["geom"] = col
+    elif not col.startswith("felt:"):
+        tables[key]["cols"].append((col, dtype))
+
+for tbl, info in tables.items():
+    cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+    cnt = cur.fetchone()[0]
+    text_cols = [c[0] for c in info["cols"] if c[1] in ("text","character varying")]
+    print(f"\n{tbl} ({cnt} rows, geom: {info['geom']})")
+    print(f"  Columns: {', '.join(c[0] for c in info['cols'][:12])}")
+    for col in text_cols[:3]:
+        cur.execute(f'SELECT DISTINCT "{col}" FROM {tbl} WHERE "{col}" IS NOT NULL LIMIT 8')
+        vals = [str(r[0])[:40] for r in cur.fetchall()]
+        if vals:
+            print(f"  {col}: {', '.join(vals)}")
+conn.close()
 ```
 
-### Get distinct values (for categorical columns):
-```python
-cur.execute("SELECT DISTINCT risk_category FROM public.building_risk")
-```
-
-### Get numeric range (for gradient styling):
-```python
-cur.execute("SELECT MIN(risk_score), MAX(risk_score), AVG(risk_score) FROM public.building_risk")
-```
-
-## Available Schemas
-
-| Schema | Domain | Key tables |
-|--------|--------|------------|
-| public | Climate risk + schools | building_risk, schools_in_victoria_australia |
-| shoprite | Retail locations + demographics | locations (has geom) |
-| real_estate | NJ parcels, sales, land cover | newjersey_parcels_mod4, past_sales, vacant_parcels_w_landcover |
-| broadband | CA infrastructure | power_plants_ca, ca_cities |
-| full_stack_demo | Solar analysis | solar_potential_queries |
-
-## Spatial Queries (PostGIS)
+## PostGIS Spatial Queries
 
 ```sql
 -- Bounding box filter
-SELECT * FROM table WHERE ST_Within(geom, ST_MakeEnvelope(xmin, ymin, xmax, ymax, 4326))
+SELECT * FROM public.my_table
+WHERE ST_Within(geom, ST_MakeEnvelope(xmin, ymin, xmax, ymax, 4326))
 
--- Distance filter (meters)
-SELECT * FROM table WHERE ST_DWithin(geom::geography, ST_MakePoint(lon, lat)::geography, 5000)
+-- Within distance (meters)
+SELECT * FROM public.my_table
+WHERE ST_DWithin(geom::geography, ST_MakePoint(lon, lat)::geography, 5000)
 
 -- Centroid
-SELECT ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat FROM table
+SELECT ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat
+FROM public.my_table
 
--- Area in sq meters
-SELECT ST_Area(geom::geography) FROM table
+-- Area
+SELECT ST_Area(geom::geography) as area_sqm FROM public.my_table
 ```
 
 ## Tips
-- Always discover the schema first before writing queries
-- Check column types to decide how to style (categorical vs numeric)
-- Use LIMIT when previewing large tables
-- Geometry column is usually `geom` or `geometry`
+- ALWAYS discover schema before writing queries — never assume column names
+- Filter out columns starting with `felt:` (internal metadata)
+- Geometry column is usually `geom`
+- Use `LIMIT` when previewing large tables
+- Check distinct values on text columns to decide between categorical vs numeric styling

@@ -4,12 +4,12 @@ Map Builder Agent
 ==================
 
 A Strands agent that builds Felt maps from any table in Aurora PostgreSQL.
+Uses skill docs (.md files) + python_repl for everything — no hard-coded tools.
 
 Tools:
-  - check_data: discover tables/columns in the database (custom @tool)
-  - verify_map: check layers + screenshot a completed map (custom @tool)
   - python_repl: execute Python code with state persistence (strands_tools)
   - file_read: read skill docs on demand (strands_tools)
+  - verify_map: check layers + screenshot a completed map (custom @tool)
 
 Usage:
     python agent.py "Map wildfire locations colored by cause"
@@ -34,13 +34,10 @@ from strands_tools import file_read, python_repl
 # ── Constants ──────────────────────────────────────────────────
 SKILLS_DIR = Path(__file__).parent / "skills"
 SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
-FELT_TOKEN = os.environ.get("FELT_API_TOKEN", "")
 
 # ── Seed python_repl state ─────────────────────────────────────
-# The official python_repl has persistent state via dill.
-# We seed it on startup so the agent's code has everything ready.
 _SEED_CODE = f"""
-import os, json, time
+import os, json, time, psycopg2
 from dotenv import load_dotenv
 from pathlib import Path
 load_dotenv(Path("{Path(__file__).parent.parent / '.env'}"), override=True)
@@ -54,148 +51,79 @@ from felt_helpers import wait_for_layer, categorical_style, numeric_style, creat
 
 TOKEN = os.environ.get("FELT_API_TOKEN", "")
 SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "{SOURCE_ID}")
-print("✅ Environment seeded: felt_python, helpers, TOKEN, SOURCE_ID ready")
+AURORA_DSN = os.environ.get("AURORA_DSN", "")
+print("✅ Ready: psycopg2, felt_python, helpers, TOKEN, SOURCE_ID, AURORA_DSN")
 """
 
 # ── System Prompt ──────────────────────────────────────────────
 SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interactive Felt maps from PostgreSQL/PostGIS data.
 
+## Your Tools
+- **python_repl** — execute Python code (state persists between calls)
+- **file_read** — read skill documentation files
+- **verify_map** — verify a completed map (call at the end)
+
+## Skill Docs (read with file_read when you need patterns/examples)
+- `{SKILLS_DIR}/aurora_postgis.md` — How to discover tables, columns, sample values, PostGIS queries
+- `{SKILLS_DIR}/felt_mapping.md` — How to create maps, add source layers, apply FSL styling
+
 ## Workflow
-1. **check_data** — ALWAYS call first to discover tables, columns, sample values
-2. **file_read** — read skill docs for API details (only when needed)
-3. **python_repl** — write and execute Python to create Felt maps
-4. **verify_map** — confirm the map loaded correctly (call at the end)
+1. Read `aurora_postgis.md` to learn the discovery pattern
+2. Use `python_repl` to discover what tables/columns are available
+3. Read `felt_mapping.md` for styling patterns (if needed)
+4. Use `python_repl` to create the map (create → add layer → wait → style)
+5. Call `verify_map` with the URL
 
-## Skill Docs (read with file_read when you need API details)
-- `{SKILLS_DIR}/aurora_postgis.md` — PostGIS query patterns
-- `{SKILLS_DIR}/felt_mapping.md` — Felt API, source layers, FSL styling (COMPREHENSIVE)
+## python_repl Environment (pre-loaded, no imports needed)
+- `psycopg2`, `os`, `json`, `time` — standard
+- `AURORA_DSN` — connection string for psycopg2.connect()
+- `create_map`, `add_source_layer`, `list_layers`, `update_layer_style` — from felt_python
+- `wait_for_layer(map_id)` — polls until layer processing completes
+- `categorical_style(attribute, top_n=10)` — builds valid FSL for categories
+- `numeric_style(attribute)` — builds valid FSL for gradients
+- `TOKEN`, `SOURCE_ID` — Felt credentials
 
-## python_repl Environment
-The following are pre-imported and ready to use (do NOT re-import):
-- `create_map(title, api_token=TOKEN)` → dict with "id", "url"
-- `add_source_layer(map_id, source_layer_params, api_token=TOKEN)`
-- `list_layers(map_id, api_token=TOKEN)` → list of layer dicts
-- `update_layer_style(map_id, layer_id, style, api_token=TOKEN)`
-- `wait_for_layer(map_id, timeout_s=90)` → polls until completed, returns layer dict
-- `categorical_style(attribute, categories=None, colors=None, top_n=10)` → valid FSL dict
-- `numeric_style(attribute, palette="@ylRed")` → valid FSL dict
-- `create_map_with_sql(title, sql, style=None)` → full pipeline, returns dict
-- `TOKEN`, `SOURCE_ID` — credentials already set
-- `os`, `json`, `time` — standard library
+## Code Patterns
 
-## Code Pattern (single layer)
+### Discover tables:
+```python
+conn = psycopg2.connect(AURORA_DSN)
+cur = conn.cursor()
+cur.execute("SELECT table_name FROM information_schema.columns WHERE udt_name='geometry' AND table_schema='public'")
+print([r[0] for r in cur.fetchall()])
+conn.close()
+```
+
+### Create a styled map:
 ```python
 m = create_map(title="My Map", api_token=TOKEN)
 map_id, map_url = m["id"], m["url"]
-print(f"Map: {{map_url}}")
 
 params = {{"from": "sql", "source_id": SOURCE_ID, "query": "SELECT * FROM public.my_table"}}
 add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
 
 layer = wait_for_layer(map_id)
-style = categorical_style("my_column", top_n=10)
-update_layer_style(map_id=map_id, layer_id=layer["id"], style=style, api_token=TOKEN)
+update_layer_style(map_id=map_id, layer_id=layer["id"], style=categorical_style("col", top_n=10), api_token=TOKEN)
 print(f"✅ {{map_url}}")
 ```
 
-## Multi-layer pattern
-Add layers ONE AT A TIME, style each before adding the next:
+### Multi-layer:
 ```python
-for table, col in [("public.t1", "col1"), ("public.t2", "col2")]:
-    params = {{"from": "sql", "source_id": SOURCE_ID, "query": f"SELECT * FROM {{table}}"}}
-    add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+for table, col in [("public.t1", "c1"), ("public.t2", "c2")]:
+    add_source_layer(map_id=map_id, source_layer_params={{"from": "sql", "source_id": SOURCE_ID, "query": f"SELECT * FROM {{table}}"}}, api_token=TOKEN)
     layer = wait_for_layer(map_id)
     update_layer_style(map_id=map_id, layer_id=layer["id"], style=categorical_style(col, top_n=10), api_token=TOKEN)
 ```
 
 ## Rules
-- ALWAYS call check_data first
-- Write the FULL pipeline in ONE python_repl call (create → add → wait → style → print URL)
+- Read the skill doc FIRST if you haven't already — don't guess at patterns
+- Write the FULL pipeline in as few python_repl calls as possible
 - NEVER create more than ONE map per request
-- ALWAYS print the map URL at the end
-- Source ID: `{SOURCE_ID}`
+- ALWAYS print the map URL
 """
 
 
 # ── Custom Tools ───────────────────────────────────────────────
-
-@tool
-def check_data(query: str) -> str:
-    """Discover spatial tables, columns, and sample values in the database.
-
-    ALWAYS call this FIRST before writing any code. Returns all spatial tables
-    with their schemas, row counts, and example values for text columns.
-
-    Args:
-        query: What the user is looking for (e.g., "wildfire", "air quality", "buildings").
-
-    Returns:
-        Formatted summary of available spatial tables and their contents.
-    """
-    import psycopg2
-
-    try:
-        conn = psycopg2.connect(os.environ["AURORA_DSN"])
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT c.table_schema, c.table_name, c.column_name, c.data_type
-            FROM information_schema.columns c
-            JOIN (
-                SELECT table_schema, table_name
-                FROM information_schema.columns
-                WHERE udt_name = 'geometry'
-            ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
-            WHERE c.table_schema = 'public'
-              AND c.table_name NOT IN ('geometry_columns', 'geography_columns',
-                                       'spatial_ref_sys', 'raster_columns', 'raster_overviews')
-            ORDER BY c.table_schema, c.table_name, c.ordinal_position
-        """)
-
-        tables = {}
-        for schema, table, col, dtype in cur.fetchall():
-            key = f"{schema}.{table}"
-            if key not in tables:
-                tables[key] = {"columns": [], "geom_col": None}
-            tables[key]["columns"].append({"name": col, "type": dtype})
-            if dtype == "USER-DEFINED":
-                tables[key]["geom_col"] = col
-
-        lines = [f"## Available Spatial Data (Source ID: {SOURCE_ID})\n"]
-        for tbl, info in tables.items():
-            try:
-                cur.execute(f"SELECT COUNT(*) FROM {tbl}")
-                count = cur.fetchone()[0]
-            except Exception:
-                conn.rollback()
-                count = "?"
-
-            display_cols = [c for c in info["columns"]
-                           if c["name"] != info["geom_col"]
-                           and not c["name"].startswith("felt:")]
-            text_cols = [c["name"] for c in display_cols
-                        if c["type"] in ("text", "character varying")]
-
-            lines.append(f"### {tbl} ({count} rows, geom: {info['geom_col']})")
-            lines.append(f"Columns: {', '.join(c['name'] + ':' + c['type'][:20] for c in display_cols[:15])}")
-            if len(display_cols) > 15:
-                lines.append(f"  ... and {len(display_cols) - 15} more columns")
-
-            for col in text_cols[:4]:
-                try:
-                    cur.execute(f'SELECT DISTINCT "{col}" FROM {tbl} WHERE "{col}" IS NOT NULL LIMIT 8')
-                    vals = [str(r[0])[:50] for r in cur.fetchall()]
-                    if vals:
-                        lines.append(f"  {col}: {', '.join(vals)}")
-                except Exception:
-                    conn.rollback()
-            lines.append("")
-
-        conn.close()
-        return "\n".join(lines)
-    except Exception as e:
-        return f"ERROR: {e}"
-
 
 @tool
 def verify_map(map_url: str) -> str:
@@ -299,14 +227,14 @@ def get_model():
 
 
 def create_agent() -> Agent:
-    """Create the map builder agent with all tools."""
+    """Create the map builder agent."""
     agent = Agent(
         model=get_model(),
         system_prompt=SYSTEM_PROMPT,
-        tools=[check_data, verify_map, python_repl, file_read],
+        tools=[python_repl, file_read, verify_map],
     )
 
-    # Seed python_repl with our environment (imports, helpers, tokens)
+    # Seed python_repl with imports and credentials
     agent.tool.python_repl(code=_SEED_CODE)
 
     return agent
@@ -321,7 +249,7 @@ def main():
     print("Type 'quit' to exit.\n")
     print("Examples:")
     print('  "Map wildfire locations colored by cause"')
-    print('  "Show all 6 tables on one map"')
+    print('  "Show all tables on one map"')
     print('  "What data is available?"')
     print()
 
