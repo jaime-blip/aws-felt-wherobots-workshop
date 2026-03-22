@@ -45,7 +45,7 @@ import felt_python
 from felt_python import create_map, add_source_layer, list_layers, update_layer_style
 
 import sys
-sys.path.insert(0, "{Path(__file__).parent / 'scripts'}")
+sys.path.insert(0, "{Path(__file__).parent / 'skills'}")
 from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql
 
 TOKEN = os.environ.get("FELT_API_TOKEN", "")
