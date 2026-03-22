@@ -27,11 +27,12 @@ SKILLS_DIR = Path(__file__).parent / "skills"
 SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt maps from PostgreSQL data.
 
 ## How You Work
-1. Read the user's request
-2. Read the relevant skill docs to understand the APIs
+1. **FIRST: call check_data** to see what's available in the database
+2. If data exists for the request, read the relevant skill docs
 3. Write Python code to query Aurora and create a Felt map
 4. Execute the code with run_python
 5. Return the Felt map URL
+6. If no matching data exists, tell the user what IS available and suggest alternatives
 
 ## Available Skill Docs (read with file_read before writing code)
 - `{SKILLS_DIR}/aurora_postgis.md` — How to discover schemas, query PostGIS, available tables
@@ -42,13 +43,95 @@ SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt map
 - AURORA_DSN — PostgreSQL connection string
 
 ## Rules
-- **Read skill docs first** before writing any code. Use file_read tool.
+- **ALWAYS call check_data first** to verify data exists before doing anything else.
+- Read skill docs before writing code. Use file_read tool.
 - Use run_python to execute code
 - ALWAYS print the Felt map URL at the end
 - ALWAYS discover the schema before assuming column names (especially geometry column name!)
 - Source ID for all SQL queries: SUdIQGqeTFKqkHrx9AYVPDA
 - Write the FULL pipeline in ONE run_python call (discover → create map → add layer → style → print URL)
 """
+
+
+@tool
+def check_data(query: str) -> str:
+    """Check what data is available before building a map.
+
+    ALWAYS call this FIRST before reading skill docs or writing code.
+    It searches the database for tables, columns, and values matching
+    the user's request and returns what's available.
+
+    Args:
+        query: What the user is looking for (e.g., "wildfire risk Austin",
+               "power plants California", "schools Victoria").
+
+    Returns:
+        Summary of matching tables, columns, sample values, and row counts.
+        If nothing matches, lists all available data so the agent can
+        suggest alternatives.
+    """
+    import psycopg2
+    import json
+
+    try:
+        conn = psycopg2.connect(os.environ["AURORA_DSN"])
+        cur = conn.cursor()
+
+        # Get all spatial tables with their columns
+        cur.execute("""
+            SELECT c.table_schema, c.table_name, c.column_name, c.data_type
+            FROM information_schema.columns c
+            JOIN (
+                SELECT table_schema, table_name
+                FROM information_schema.columns
+                WHERE udt_name = 'geometry'
+            ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
+            WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY c.table_schema, c.table_name, c.ordinal_position
+        """)
+
+        tables = {}
+        for schema, table, col, dtype in cur.fetchall():
+            key = f"{schema}.{table}"
+            if key not in tables:
+                tables[key] = {"columns": [], "geom_col": None}
+            tables[key]["columns"].append({"name": col, "type": dtype})
+            if dtype == "USER-DEFINED":
+                tables[key]["geom_col"] = col
+
+        # For each spatial table, get row count and sample text values
+        result_lines = ["## Available Spatial Data\n"]
+        for tbl, info in tables.items():
+            try:
+                cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+                count = cur.fetchone()[0]
+            except Exception:
+                conn.rollback()
+                count = "?"
+
+            text_cols = [c["name"] for c in info["columns"]
+                        if c["type"] in ("text", "character varying") and c["name"] != info["geom_col"]]
+
+            result_lines.append(f"### {tbl} ({count} rows, geom: {info['geom_col']})")
+            result_lines.append(f"Columns: {', '.join(c['name'] + ':' + c['type'][:20] for c in info['columns'] if c['name'] != info['geom_col'])}")
+
+            # Sample distinct values from text columns (for matching)
+            for col in text_cols[:4]:
+                try:
+                    cur.execute(f"SELECT DISTINCT {col} FROM {tbl} WHERE {col} IS NOT NULL LIMIT 10")
+                    vals = [str(r[0]) for r in cur.fetchall()]
+                    if vals:
+                        result_lines.append(f"  {col} values: {', '.join(vals)}")
+                except Exception:
+                    conn.rollback()
+
+            result_lines.append("")
+
+        conn.close()
+        return "\n".join(result_lines)
+
+    except Exception as e:
+        return f"ERROR checking data: {e}"
 
 
 _exec_globals = {"__builtins__": __builtins__}
@@ -104,7 +187,7 @@ def create_agent() -> Agent:
     return Agent(
         model=get_model(),
         system_prompt=SYSTEM_PROMPT,
-        tools=[file_read, run_python],
+        tools=[check_data, file_read, run_python],
     )
 
 
