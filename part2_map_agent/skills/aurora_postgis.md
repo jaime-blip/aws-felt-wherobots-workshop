@@ -1,6 +1,6 @@
 # Aurora PostGIS — Data Discovery Skill
 
-How to discover and query spatial data in Amazon Aurora PostgreSQL (PostGIS).
+How to discover and query spatial data in Amazon Aurora PostgreSQL with PostGIS.
 
 ## Connection
 
@@ -8,20 +8,22 @@ How to discover and query spatial data in Amazon Aurora PostgreSQL (PostGIS).
 import psycopg2, os
 conn = psycopg2.connect(os.environ["AURORA_DSN"])
 cur = conn.cursor()
+# ... queries ...
+conn.close()
 ```
 
 `psycopg2`, `os`, and `AURORA_DSN` are pre-loaded in your environment.
 
-## Step 1: Find Spatial Tables
+## Step 1: Find All Spatial Tables
 
 ```python
-conn = psycopg2.connect(os.environ["AURORA_DSN"])
+conn = psycopg2.connect(AURORA_DSN)
 cur = conn.cursor()
 cur.execute("""
     SELECT table_schema, table_name, column_name
     FROM information_schema.columns
     WHERE udt_name = 'geometry'
-      AND table_schema NOT IN ('pg_catalog','information_schema')
+      AND table_schema NOT IN ('pg_catalog', 'information_schema')
     ORDER BY table_schema, table_name
 """)
 for schema, table, geom_col in cur.fetchall():
@@ -31,19 +33,19 @@ for schema, table, geom_col in cur.fetchall():
 conn.close()
 ```
 
-## Step 2: Inspect Columns
+## Step 2: Inspect a Table's Columns
 
 ```python
-conn = psycopg2.connect(os.environ["AURORA_DSN"])
+conn = psycopg2.connect(AURORA_DSN)
 cur = conn.cursor()
 cur.execute("""
     SELECT column_name, data_type
     FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'MY_TABLE'
+    WHERE table_schema = %s AND table_name = %s
     ORDER BY ordinal_position
-""")
+""", ('public', 'your_table_here'))
 for col, dtype in cur.fetchall():
-    if not col.startswith("felt:"):  # skip internal columns
+    if not col.startswith("felt:"):  # skip internal metadata columns
         print(f"  {col}: {dtype}")
 conn.close()
 ```
@@ -51,34 +53,34 @@ conn.close()
 ## Step 3: Sample Values (for styling decisions)
 
 ```python
-conn = psycopg2.connect(os.environ["AURORA_DSN"])
+conn = psycopg2.connect(AURORA_DSN)
 cur = conn.cursor()
 
-# Distinct values for categorical columns
-cur.execute("SELECT DISTINCT my_column FROM public.my_table WHERE my_column IS NOT NULL LIMIT 15")
+# Distinct values — use for categorical styling
+cur.execute('SELECT DISTINCT "column_name" FROM schema.table WHERE "column_name" IS NOT NULL LIMIT 15')
 print([r[0] for r in cur.fetchall()])
 
-# Numeric range for gradient styling
-cur.execute("SELECT MIN(my_num), MAX(my_num), AVG(my_num) FROM public.my_table")
+# Numeric range — use for gradient/numeric styling
+cur.execute('SELECT MIN("column_name"), MAX("column_name"), AVG("column_name") FROM schema.table')
 print(cur.fetchone())
 
-# Preview rows
-cur.execute("SELECT * FROM public.my_table LIMIT 3")
+# Preview a few rows
+cur.execute("SELECT * FROM schema.table LIMIT 3")
 for row in cur.fetchall():
     print(row)
+
 conn.close()
 ```
 
-## Quick Discovery Script (all-in-one)
+## Quick Discovery (all-in-one)
 
-Use this to get a full picture of what's available:
+Discovers all spatial tables, their columns, row counts, and sample text values:
 
 ```python
 import psycopg2, os
-conn = psycopg2.connect(os.environ["AURORA_DSN"])
+conn = psycopg2.connect(AURORA_DSN)
 cur = conn.cursor()
 
-# Find all spatial tables
 cur.execute("""
     SELECT c.table_schema, c.table_name, c.column_name, c.data_type
     FROM information_schema.columns c
@@ -86,8 +88,9 @@ cur.execute("""
         SELECT table_schema, table_name
         FROM information_schema.columns WHERE udt_name = 'geometry'
     ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
-    WHERE c.table_schema = 'public'
-      AND c.table_name NOT IN ('geometry_columns','geography_columns','spatial_ref_sys','raster_columns','raster_overviews')
+    WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+      AND c.table_name NOT IN ('geometry_columns', 'geography_columns',
+                               'spatial_ref_sys', 'raster_columns', 'raster_overviews')
     ORDER BY c.table_schema, c.table_name, c.ordinal_position
 """)
 
@@ -104,7 +107,7 @@ for schema, table, col, dtype in cur.fetchall():
 for tbl, info in tables.items():
     cur.execute(f"SELECT COUNT(*) FROM {tbl}")
     cnt = cur.fetchone()[0]
-    text_cols = [c[0] for c in info["cols"] if c[1] in ("text","character varying")]
+    text_cols = [c[0] for c in info["cols"] if c[1] in ("text", "character varying")]
     print(f"\n{tbl} ({cnt} rows, geom: {info['geom']})")
     print(f"  Columns: {', '.join(c[0] for c in info['cols'][:12])}")
     for col in text_cols[:3]:
@@ -119,24 +122,30 @@ conn.close()
 
 ```sql
 -- Bounding box filter
-SELECT * FROM public.my_table
+SELECT * FROM schema.table
 WHERE ST_Within(geom, ST_MakeEnvelope(xmin, ymin, xmax, ymax, 4326))
 
 -- Within distance (meters)
-SELECT * FROM public.my_table
+SELECT * FROM schema.table
 WHERE ST_DWithin(geom::geography, ST_MakePoint(lon, lat)::geography, 5000)
 
--- Centroid
-SELECT ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat
-FROM public.my_table
+-- Centroid of each feature
+SELECT *, ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat
+FROM schema.table
 
--- Area
-SELECT ST_Area(geom::geography) as area_sqm FROM public.my_table
+-- Area in square meters
+SELECT *, ST_Area(geom::geography) as area_sqm FROM schema.table
+
+-- Spatial join (e.g. points in polygons)
+SELECT a.*, b.name AS containing_region
+FROM schema.points a
+JOIN schema.polygons b ON ST_Within(a.geom, b.geom)
 ```
 
 ## Tips
-- ALWAYS discover schema before writing queries — never assume column names
+- ALWAYS discover the schema before writing queries — never assume column names
 - Filter out columns starting with `felt:` (internal metadata)
-- Geometry column is usually `geom`
+- Geometry column is usually `geom` but always verify
 - Use `LIMIT` when previewing large tables
-- Check distinct values on text columns to decide between categorical vs numeric styling
+- Check distinct values on text columns → categorical styling
+- Check min/max on numeric columns → gradient/numeric styling

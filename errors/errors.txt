@@ -117,3 +117,113 @@ Traceback (most recent call last):
     raise RuntimeError(f"Layer processing failed: {failed[0]}")
 RuntimeError: Layer processing failed: {'id': 'U89A0Cl55TgejsvViaJaltC', 'links': {'self': 'https://felt.com/api/v2/maps/4BvT79C5MTLeZ4r9AHIEkr5D/layers/U89A0Cl55TgejsvViaJaltC'}, 'name': 'Aurora 3 - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 1, 'refresh_period': 'disabled'}
 
+
+[2026-03-23T00:24:21.130024] Python REPL Error:
+Code:
+# Create wildfire perimeters map colored by category
+# The key categorical field is poly_featurecategory with values like:
+# - "Wildfire Final Fire Perimeter"  
+# - "Wildfire Daily Fire Perimeter"
+# - "Prescribed Fire"
+
+# Create the map
+map_response = create_map(
+    title="Wildfire Perimeters by Category",
+    description="Wildfire perimeters colored by feature category (Final, Daily, Prescribed Fire)",
+    basemap="satellite"
+)
+
+map_id = map_response['id']
+map_url = map_response['url']
+
+print(f"✅ Created map: {map_url}")
+
+# Add wildfire perimeters layer from database
+params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": """SELECT 
+        fid,
+        poly_incidentname,
+        poly_featurecategory,
+        poly_gisacres,
+        poly_createdate,
+        attr_incidentname,
+        attr_firecause,
+        attr_finalacres,
+        ST_Transform(geom, 4326) as geometry
+    FROM public.wildfire_perimeters"""
+}
+
+response = add_source_layer(
+    map_id=map_id, 
+    source_layer_params=params, 
+    api_token=TOKEN
+)
+
+layer_id = response['layer_id']
+print(f"✅ Added layer: {layer_id}")
+
+# Wait for layer processing to complete
+layer = wait_for_layer(map_id)
+print(f"✅ Layer processing complete: {layer['name']}")
+
+# Apply categorical styling by poly_featurecategory
+style = {
+    "version": "2.3.1",
+    "type": "categorical",
+    "config": {
+        "categoricalAttribute": "poly_featurecategory",
+        "categories": {"type": "top", "count": 10},
+        "showOther": true
+    },
+    "paint": {
+        "color": "@catPalette4",  # Categorical palette for fire types
+        "opacity": 0.7,          # Semi-transparent for overlapping perimeters
+        "strokeColor": "auto",   # Contrasting borders
+        "strokeWidth": 1
+    },
+    "legend": {
+        "displayName": {
+            "Wildfire Final Fire Perimeter": "Final Fire Perimeter",
+            "Wildfire Daily Fire Perimeter": "Daily Fire Perimeter", 
+            "Prescribed Fire": "Prescribed Fire"
+        }
+    },
+    "popup": {
+        "titleAttribute": "attr_incidentname",
+        "keyAttributes": ["poly_featurecategory", "poly_gisacres", "attr_firecause", "poly_createdate"],
+        "popupLocation": "rightSidebar"
+    },
+    "attributes": {
+        "poly_featurecategory": {"displayName": "Fire Category"},
+        "poly_gisacres": {"displayName": "GIS Acres"},
+        "attr_firecause": {"displayName": "Fire Cause"},
+        "attr_incidentname": {"displayName": "Incident Name"},
+        "poly_createdate": {"displayName": "Created Date"}
+    }
+}
+
+update_layer_style(
+    map_id=map_id,
+    layer_id=layer_id,
+    style=style,
+    api_token=TOKEN
+)
+
+print(f"🔥 Wildfire Perimeters Map Complete: {map_url}")
+print(f"📊 Features: {layer.get('feature_count', 'Unknown')} wildfire perimeters")
+print(f"🏷️ Styled by: Fire category (Final/Daily/Prescribed)")
+print(f"🎨 Colors: Categorical palette distinguishing fire types")
+print(f"📍 Popups: Click perimeters to see incident details")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 42, in <module>
+KeyError: 'layer_id'
+
