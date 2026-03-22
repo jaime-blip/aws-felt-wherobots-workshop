@@ -4,16 +4,18 @@ Create interactive maps from any database table using the Felt API.
 
 ## Setup
 
+**CRITICAL:** Always pass `api_token=token` to every felt_python function call.
+
 ```python
 import os
-os.environ["FELT_API_TOKEN"] = os.environ.get("FELT_API_TOKEN", "")
+token = os.environ["FELT_API_TOKEN"]
 from felt_python import create_map, add_source_layer, list_layers, update_layer_style
 ```
 
 ## Create a Map
 
 ```python
-response = create_map(title="My Map", lat=30.27, lon=-97.74, zoom=11)
+response = create_map(title="My Map", lat=30.27, lon=-97.74, zoom=11, api_token=token)
 map_id = response["id"]
 map_url = response["url"]
 ```
@@ -31,18 +33,20 @@ add_source_layer(
         "from": "sql",
         "source_id": "SUdIQGqeTFKqkHrx9AYVPDA",
         "query": "SELECT * FROM schema.table WHERE ..."
-    }
+    },
+    api_token=token
 )
 time.sleep(3)
-layers = list_layers(map_id=map_id)
+layers = list_layers(map_id=map_id, api_token=token)
 layer_id = layers[-1]["id"]
 ```
 
 **SQL rules:**
-- Must include a geometry column
+- Must include the geometry column (name varies: `geometry`, `geom`, etc. — CHECK FIRST)
 - Geometry must be SRID 4326 (or use ST_Transform)
 - Read-only SELECT queries only
-- Use schema-qualified names (e.g., `public.building_risk`, `real_estate.past_sales`)
+- Use schema-qualified names (e.g., `public.building_risk`, `broadband.power_plants_ca`)
+- **CRITICAL**: Always discover the actual geometry column name before writing SQL. Different tables use different names (`geometry` vs `geom` vs others).
 
 ## Style Layers with FSL
 
@@ -66,7 +70,7 @@ style = {
     },
     "legend": {}
 }
-update_layer_style(map_id=map_id, layer_id=layer_id, style=style)
+update_layer_style(map_id=map_id, layer_id=layer_id, style=style, api_token=token)
 ```
 
 ### Numeric gradient (for FLOAT/INT columns):

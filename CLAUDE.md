@@ -181,3 +181,10 @@ AURORA_DSN=postgresql://sales_engineers_user:ZwIZ5dUqaAwfUlgirLoStAHzIMrY0f99@dp
 - [ ] Build Part 2 agent with skills + code execution
 - [ ] Write step-by-step workshop document
 - [ ] Create architecture diagram
+
+## AgentCore — Not for Workshop, Mention in "Next Steps"
+- **Amazon Bedrock AgentCore** = infrastructure layer for deploying agents in production
+- Provides: Runtime (Starlette web server), Identity (auth), Memory (persistent), Tools (managed browser/code interpreter), Observability
+- **Overkill for workshop** — attendees are learning to build, not deploy
+- **Use in wrap-up slide**: "Ready to productionize? AgentCore handles runtime, identity, memory, and monitoring."
+- Package: `bedrock-agentcore` (pip installable, v1.4.7)

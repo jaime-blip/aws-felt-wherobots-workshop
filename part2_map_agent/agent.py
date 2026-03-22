@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 
 from strands import Agent, tool
 
@@ -72,10 +72,18 @@ SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt map
 ## Rules
 - ALWAYS use run_python to execute code
 - ALWAYS print the Felt map URL at the end
-- ALWAYS discover the schema before assuming column names
+- ALWAYS discover the schema before assuming column names (especially the geometry column name!)
+- ALWAYS pass api_token=token to every felt_python function call
 - Source ID for all SQL queries: SUdIQGqeTFKqkHrx9AYVPDA
 - Use schema-qualified table names (e.g., public.building_risk, broadband.power_plants_ca)
+- Variables persist between run_python calls — set up imports and token once, reuse them
+- **STRONGLY PREFER** writing the FULL pipeline in ONE run_python call. Do NOT split into multiple calls.
+  The pattern is: discover schema → create map → add source layer → wait → list layers → style → print URL.
+  All in one code block. Multiple calls cause auth issues.
 """
+
+
+_exec_globals = {"__builtins__": __builtins__}
 
 
 @tool
@@ -85,6 +93,9 @@ def run_python(code: str) -> str:
     Use this to query Aurora PostgreSQL and create Felt maps.
     Available: psycopg2, felt_python, os, json, time.
     Env vars: AURORA_DSN, FELT_API_TOKEN.
+
+    Variables persist between calls — you can define something in one call
+    and use it in the next.
 
     Args:
         code: Python code to execute.
@@ -97,9 +108,11 @@ def run_python(code: str) -> str:
 
     stdout = io.StringIO()
     stderr = io.StringIO()
+    # Log code being executed
+    print(f"--- EXECUTING ---\n{code}\n--- END CODE ---", file=sys.stderr)
     try:
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            exec(code, {"__builtins__": __builtins__})
+            exec(code, _exec_globals)
         output = stdout.getvalue()
         errors = stderr.getvalue()
         result = output
@@ -120,7 +133,7 @@ def get_model():
     else:
         from strands.models.bedrock import BedrockModel
         return BedrockModel(
-            model_id="us.anthropic.claude-sonnet-4-20250514",
+            model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
             region_name="us-west-2",
         )
 
