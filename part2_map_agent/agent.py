@@ -109,26 +109,41 @@ def create_agent() -> Agent:
 
 
 def main():
+    print("🗺️  Map Builder Agent")
+    print("=" * 50)
+    print("Build Felt maps from any database table.")
+    print("Type 'quit' to exit.\n")
+    print("Examples:")
+    print('  "Show wildfire risk for Austin buildings"')
+    print('  "Map power plants in California by energy source"')
+    print('  "Now color it by capacity instead"')
+    print('  "What other data is available?"')
+    print()
+
+    agent = create_agent()
+
+    # Single prompt from CLI args
     if len(sys.argv) > 1:
         prompt = " ".join(sys.argv[1:])
-    else:
-        print("🗺️  Map Builder Agent")
-        print("=" * 50)
-        print("Build Felt maps from any database table.\n")
-        print("Examples:")
-        print('  "Show wildfire risk for Austin buildings"')
-        print('  "Map power plants in California by energy source"')
-        print('  "Show schools in Victoria Australia by type"')
-        print('  "What data is available?"')
+        print(f"🔍 {prompt}\n")
+        agent(prompt)
         print()
-        prompt = input("🔍 > ").strip()
-        if not prompt:
-            sys.exit(0)
 
-    print(f"\n🤖 Working on: {prompt}\n")
-    agent = create_agent()
-    result = agent(prompt)
-    print(f"\n{'='*50}\n✅ Done!")
+    # Interactive loop
+    while True:
+        try:
+            prompt = input("🔍 > ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n👋 Bye!")
+            break
+        if not prompt:
+            continue
+        if prompt.lower() in ("quit", "exit", "q"):
+            print("👋 Bye!")
+            break
+        print()
+        agent(prompt)
+        print()
 
 
 if __name__ == "__main__":
