@@ -6,7 +6,34 @@
 - **ALWAYS pass `api_token=token` to every felt_python function call**
 - Get token with: `token = os.environ["FELT_API_TOKEN"]`
 - Geometry column names vary (`geometry`, `geom`) — always discover first
-- After `add_source_layer()`, do `time.sleep(3)` then `list_layers()` to get the real layer_id
+- After `add_source_layer()`, **poll for processing completion** before styling:
+
+```python
+import time
+from felt_python import list_layers
+
+# MANDATORY: poll until layer processing is done
+layer_id = None
+for _ in range(20):  # up to ~60s
+    time.sleep(3)
+    layers = list_layers(map_id=map_id, api_token=token)
+    if layers:
+        status = layers[0].get("status")
+        progress = layers[0].get("progress", 0)
+        print(f"  Layer status: {status} ({progress}%)")
+        if status == "completed":
+            layer_id = layers[0]["id"]
+            break
+        if status == "failed":
+            raise Exception("Layer processing failed!")
+
+if not layer_id:
+    raise Exception("Layer never finished processing")
+```
+
+- **Never style a layer before it reaches `status == "completed"`** — you'll get 422 errors
+- Statuses: `processing` → `completed` (or `failed`). Progress: 0→100.
+- Large tables (1000+ rows) may take 15-30s; small ones ~6-9s
 
 ---
 
