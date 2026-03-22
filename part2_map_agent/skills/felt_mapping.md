@@ -1,7 +1,7 @@
 # Workshop-Specific Notes (READ FIRST)
 
 ## Aurora PostgreSQL Source
-- **Source ID:** `SUdIQGqeTFKqkHrx9AYVPDA`
+- **Source ID:** Read from `os.environ["FELT_SOURCE_ID"]` (default: `e5UKkPZxTwiR9CxbRzFw9AZA`)
 - Use `add_source_layer()` with `"from": "sql"` and this source_id for all database queries
 - **ALWAYS pass `api_token=token` to every felt_python function call**
 - Get token with: `token = os.environ["FELT_API_TOKEN"]`

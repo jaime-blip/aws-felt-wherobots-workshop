@@ -23,13 +23,15 @@ from strands import Agent, tool
 from strands_tools import file_read
 
 SKILLS_DIR = Path(__file__).parent / "skills"
+SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
+TOKEN = os.environ.get("FELT_API_TOKEN", "")
 
-SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt maps from PostgreSQL data.
+SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt maps from PostgreSQL data via Felt's source layer API.
 
 ## How You Work
-1. **FIRST: call check_data** to see what's available in the database
+1. **FIRST: call check_data** to see what tables/datasets are available
 2. If data exists for the request, read the relevant skill docs
-3. Write Python code to query Aurora and create a Felt map
+3. Write Python code to create a Felt map using add_source_layer with SQL
 4. Execute the code with run_python
 5. Return the Felt map URL
 6. **Call verify_map** with the URL to confirm layers loaded and styling applied
@@ -39,18 +41,19 @@ SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt map
 - `{SKILLS_DIR}/aurora_postgis.md` — How to discover schemas, query PostGIS, available tables
 - `{SKILLS_DIR}/felt_mapping.md` — How to create maps, add source layers, apply FSL styling (COMPREHENSIVE — read this for any Felt API or styling question)
 
-## Environment Variables
+## Environment Variables (already configured)
 - FELT_API_TOKEN — for felt_python (ALWAYS pass api_token=token to every call)
-- AURORA_DSN — PostgreSQL connection string
+- FELT_SOURCE_ID — the Felt source connected to Aurora PostgreSQL
 
 ## Rules
 - **ALWAYS call check_data first** to verify data exists before doing anything else.
 - Read skill docs before writing code. Use file_read tool.
 - Use run_python to execute code
 - ALWAYS print the Felt map URL at the end
-- ALWAYS discover the schema before assuming column names (especially geometry column name!)
-- Source ID for all SQL queries: SUdIQGqeTFKqkHrx9AYVPDA
-- Write the FULL pipeline in ONE run_python call (discover → create map → add layer → style → print URL)
+- **Discover columns via SQL**: use run_python with add_source_layer to run `SELECT * FROM table LIMIT 0` or similar to discover column names — DON'T assume column names!
+- Source ID for all SQL queries: `{SOURCE_ID}`
+- Write the FULL pipeline in ONE run_python call (create map → add layer → poll for completion → style → print URL)
+- **Import helpers**: `sys.path.insert(0, '{Path(__file__).parent / "scripts"}'); from felt_helpers import wait_for_layer, categorical_style, numeric_style`
 """
 
 
@@ -59,77 +62,59 @@ def check_data(query: str) -> str:
     """Check what data is available before building a map.
 
     ALWAYS call this FIRST before reading skill docs or writing code.
-    It searches the database for tables, columns, and values matching
-    the user's request and returns what's available.
+    Lists all datasets (tables) available in the connected Felt source,
+    including geometry types. Use this to find the right table for the
+    user's request.
 
     Args:
-        query: What the user is looking for (e.g., "wildfire risk Austin",
-               "power plants California", "schools Victoria").
+        query: What the user is looking for (e.g., "wildfire risk",
+               "power plants California", "air quality").
 
     Returns:
-        Summary of matching tables, columns, sample values, and row counts.
-        If nothing matches, lists all available data so the agent can
-        suggest alternatives.
+        Summary of available datasets with geometry types.
+        Use run_python with a discovery SQL query to get column details
+        for a specific table.
     """
-    import psycopg2
+    import urllib.request
     import json
 
     try:
-        conn = psycopg2.connect(os.environ["AURORA_DSN"])
-        cur = conn.cursor()
+        req = urllib.request.Request(
+            f"https://felt.com/api/v2/sources/{SOURCE_ID}",
+            headers={"Authorization": f"Bearer {TOKEN}"}
+        )
+        source = json.loads(urllib.request.urlopen(req).read())
+        datasets = source.get("datasets", [])
 
-        # Get all spatial tables with their columns
-        cur.execute("""
-            SELECT c.table_schema, c.table_name, c.column_name, c.data_type
-            FROM information_schema.columns c
-            JOIN (
-                SELECT table_schema, table_name
-                FROM information_schema.columns
-                WHERE udt_name = 'geometry'
-            ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
-            WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
-            ORDER BY c.table_schema, c.table_name, c.ordinal_position
-        """)
+        lines = [
+            f"## Available Datasets (Source: {source.get('name', '?')})\n",
+            f"Source ID: `{SOURCE_ID}`\n",
+        ]
 
-        tables = {}
-        for schema, table, col, dtype in cur.fetchall():
-            key = f"{schema}.{table}"
-            if key not in tables:
-                tables[key] = {"columns": [], "geom_col": None}
-            tables[key]["columns"].append({"name": col, "type": dtype})
-            if dtype == "USER-DEFINED":
-                tables[key]["geom_col"] = col
+        spatial = []
+        non_spatial = []
+        for d in datasets:
+            geo = d.get("geometry_type", "none")
+            name = d.get("name", "?")
+            if geo not in (None, "none"):
+                spatial.append((name, geo))
+            else:
+                non_spatial.append(name)
 
-        # For each spatial table, get row count and sample text values
-        result_lines = ["## Available Spatial Data\n"]
-        for tbl, info in tables.items():
-            try:
-                cur.execute(f"SELECT COUNT(*) FROM {tbl}")
-                count = cur.fetchone()[0]
-            except Exception:
-                conn.rollback()
-                count = "?"
+        lines.append(f"### Spatial Tables ({len(spatial)})")
+        for name, geo in spatial:
+            lines.append(f"- **{name}** ({geo})")
 
-            text_cols = [c["name"] for c in info["columns"]
-                        if c["type"] in ("text", "character varying") and c["name"] != info["geom_col"]]
+        if non_spatial:
+            lines.append(f"\n### Non-Spatial Tables ({len(non_spatial)})")
+            for name in non_spatial:
+                lines.append(f"- {name}")
 
-            result_lines.append(f"### {tbl} ({count} rows, geom: {info['geom_col']})")
-            result_lines.append(f"Columns: {', '.join(c['name'] + ':' + c['type'][:20] for c in info['columns'] if c['name'] != info['geom_col'])}")
+        lines.append(f"\n**To discover columns**, use run_python to create a temporary map with:")
+        lines.append(f"  `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '<table>' ORDER BY ordinal_position`")
+        lines.append(f"Or: `SELECT * FROM <table> LIMIT 5` to see sample data.")
 
-            # Sample distinct values from text columns (for matching)
-            for col in text_cols[:4]:
-                try:
-                    cur.execute(f"SELECT DISTINCT {col} FROM {tbl} WHERE {col} IS NOT NULL LIMIT 10")
-                    vals = [str(r[0]) for r in cur.fetchall()]
-                    if vals:
-                        result_lines.append(f"  {col} values: {', '.join(vals)}")
-                except Exception:
-                    conn.rollback()
-
-            result_lines.append("")
-
-        conn.close()
-        return "\n".join(result_lines)
+        return "\n".join(lines)
 
     except Exception as e:
         return f"ERROR checking data: {e}"

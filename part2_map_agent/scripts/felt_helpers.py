@@ -19,7 +19,7 @@ from felt_python import (
 )
 
 TOKEN = os.environ.get("FELT_API_TOKEN")
-SOURCE_ID = "SUdIQGqeTFKqkHrx9AYVPDA"
+SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
 
 
 # ── Layer Processing ──────────────────────────────────────────
