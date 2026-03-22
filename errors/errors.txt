@@ -1,0 +1,119 @@
+
+[2026-03-23T00:08:24.521576] Python REPL Error:
+Code:
+# Let's examine the wildfire_locations table structure and find the cause column
+import psycopg2
+import os
+
+# Get database connection details from environment
+db_host = os.environ.get("DB_HOST")
+db_port = os.environ.get("DB_PORT", "5432")
+db_name = os.environ.get("DB_NAME")
+db_user = os.environ.get("DB_USER")
+db_password = os.environ.get("DB_PASSWORD")
+
+# Connect and examine the table
+conn = psycopg2.connect(
+    host=db_host,
+    port=db_port,
+    database=db_name,
+    user=db_user,
+    password=db_password
+)
+
+cursor = conn.cursor()
+
+# Get column info for wildfire_locations
+cursor.execute("""
+    SELECT column_name, data_type 
+    FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'wildfire_locations'
+    ORDER BY ordinal_position
+""")
+columns = cursor.fetchall()
+
+print("Wildfire locations columns:")
+for col_name, data_type in columns:
+    print(f"  {col_name}: {data_type}")
+
+# Look for cause-related columns
+cause_columns = [col for col, dtype in columns if 'cause' in col[0].lower()]
+print(f"\nCause-related columns: {cause_columns}")
+
+# Check some sample data to find the actual cause column
+cursor.execute("SELECT * FROM public.wildfire_locations LIMIT 1")
+sample_row = cursor.fetchone()
+column_names = [desc[0] for desc in cursor.description]
+
+# Look for columns that might contain cause information
+potential_cause_cols = []
+for i, col_name in enumerate(column_names):
+    if any(keyword in col_name.lower() for keyword in ['cause', 'ignition', 'origin', 'source']):
+        potential_cause_cols.append((col_name, sample_row[i]))
+
+print(f"\nPotential cause columns with sample values:")
+for col_name, sample_val in potential_cause_cols:
+    print(f"  {col_name}: {sample_val}")
+
+cursor.close()
+conn.close()
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 13, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such file or directory
+	Is the server running locally and accepting connections on that socket?
+
+
+
+[2026-03-23T00:08:34.896851] Python REPL Error:
+Code:
+# Let's create a test query to examine the wildfire_locations table structure
+# We'll look at a sample of the data to find cause-related columns
+
+test_sql = """
+SELECT 
+    fid, objectid, incidentname, 
+    generalcause, specificcause, 
+    primaryfueltype, firesize,
+    discoveryacres, finalacres,
+    ST_X(geom) as longitude, ST_Y(geom) as latitude
+FROM public.wildfire_locations 
+LIMIT 5
+"""
+
+# Create a test map to see what columns are available
+test_map = create_map(title="Test Wildfire Data Structure", api_token=TOKEN)
+map_id, map_url = test_map["id"], test_map["url"]
+
+params = {
+    "from": "sql", 
+    "source_id": SOURCE_ID, 
+    "query": test_sql
+}
+
+add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+layer = wait_for_layer(map_id)
+
+print(f"Test map created: {map_url}")
+print("This will help us examine the available columns in the wildfire data")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 26, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/scripts/felt_helpers.py", line 59, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'U89A0Cl55TgejsvViaJaltC', 'links': {'self': 'https://felt.com/api/v2/maps/4BvT79C5MTLeZ4r9AHIEkr5D/layers/U89A0Cl55TgejsvViaJaltC'}, 'name': 'Aurora 3 - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 1, 'refresh_period': 'disabled'}
+
