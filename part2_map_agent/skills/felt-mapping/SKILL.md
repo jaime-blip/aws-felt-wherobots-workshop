@@ -1,3 +1,9 @@
+---
+name: felt-mapping
+description: Create interactive Felt maps from spatial data. Covers map creation, source layers from PostgreSQL, FSL styling (categorical, numeric, heatmaps, icons, labels), and map verification.
+allowed-tools: python_repl file_read
+---
+
 # Workshop-Specific Notes (READ FIRST)
 
 ## Aurora PostgreSQL Source

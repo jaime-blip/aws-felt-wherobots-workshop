@@ -1,4 +1,10 @@
-# Aurora PostGIS — Data Discovery Skill
+---
+name: aurora-postgis
+description: Discover and query spatial data in Amazon Aurora PostgreSQL with PostGIS. Use when the user asks what data is available, or before building any map.
+allowed-tools: python_repl file_read
+---
+
+# Aurora PostGIS — Data Discovery
 
 How to discover and query spatial data in Amazon Aurora PostgreSQL with PostGIS.
 
@@ -6,7 +12,7 @@ How to discover and query spatial data in Amazon Aurora PostgreSQL with PostGIS.
 
 ```python
 import psycopg2, os
-conn = psycopg2.connect(os.environ["AURORA_DSN"])
+conn = psycopg2.connect(AURORA_DSN)
 cur = conn.cursor()
 # ... queries ...
 conn.close()
@@ -68,13 +74,12 @@ print(cur.fetchone())
 cur.execute("SELECT * FROM schema.table LIMIT 3")
 for row in cur.fetchall():
     print(row)
-
 conn.close()
 ```
 
 ## Quick Discovery (all-in-one)
 
-Discovers all spatial tables, their columns, row counts, and sample text values:
+Run the script at `scripts/discover_tables.py` or use this pattern:
 
 ```python
 import psycopg2, os
