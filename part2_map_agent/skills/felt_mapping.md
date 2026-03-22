@@ -2353,3 +2353,50 @@ How you break continuous values into classes changes the map's message.
 ```
 
 **Always ask:** "Why these break points?" If you can't explain, reconsider your classification.
+
+---
+
+# VERIFICATION
+
+After creating and styling a map, verify it loaded correctly using the Felt API.
+
+## Check Map & Layers
+
+```python
+import urllib.request, json, os
+
+token = os.environ["FELT_API_TOKEN"]
+map_id = "YOUR_MAP_ID"  # extract from the map URL
+
+# Get map metadata
+req = urllib.request.Request(
+    f"https://felt.com/api/v2/maps/{map_id}",
+    headers={"Authorization": f"Bearer {token}"}
+)
+map_data = json.loads(urllib.request.urlopen(req).read())
+print(f"Title: {map_data['title']}")
+print(f"URL: {map_data['url']}")
+
+# Get layers
+req2 = urllib.request.Request(
+    f"https://felt.com/api/v2/maps/{map_id}/layers",
+    headers={"Authorization": f"Bearer {token}"}
+)
+layers = json.loads(urllib.request.urlopen(req2).read())
+print(f"Layers: {len(layers)}")
+
+for layer in layers:
+    name = layer.get("name", "Unnamed")
+    status = layer.get("status", "?")
+    features = layer.get("metadata", {}).get("feature_count", "?")
+    style = layer.get("style", {}).get("type", "none")
+    print(f"  - {name}: status={status}, features={features}, style={style}")
+    if status == "failed":
+        print(f"    ⚠️ FAILED — check the SQL query")
+```
+
+## What to Check
+- All layers have `status: completed` (not `processing` or `failed`)
+- Feature counts are non-zero
+- Style type is not `simple` (unless intentional) — means no custom styling was applied
+- The map URL is accessible

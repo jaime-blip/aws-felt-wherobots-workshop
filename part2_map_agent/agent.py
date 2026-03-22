@@ -9,7 +9,6 @@ Uses skill docs (.md files) + python_repl for everything — no hard-coded tools
 Tools:
   - python_repl: execute Python code with state persistence (strands_tools)
   - file_read: read skill docs on demand (strands_tools)
-  - verify_map: check layers + screenshot a completed map (custom @tool)
 
 Usage:
     python agent.py "Map wildfire locations colored by cause"
@@ -28,7 +27,7 @@ os.environ.setdefault("BYPASS_TOOL_CONSENT", "true")
 os.environ.setdefault("PYTHON_REPL_INTERACTIVE", "false")
 os.environ.setdefault("PYTHON_REPL_RESET_STATE", "false")
 
-from strands import Agent, tool
+from strands import Agent
 from strands_tools import file_read, python_repl
 
 # ── Constants ──────────────────────────────────────────────────
@@ -61,7 +60,6 @@ SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interacti
 ## Your Tools
 - **python_repl** — execute Python code (state persists between calls)
 - **file_read** — read skill documentation files
-- **verify_map** — verify a completed map (call at the end)
 
 ## Skill Docs (read with file_read when you need patterns/examples)
 - `{SKILLS_DIR}/aurora_postgis.md` — How to discover tables, columns, sample values, PostGIS queries
@@ -72,7 +70,7 @@ SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interacti
 2. Use `python_repl` to discover what tables/columns are available
 3. Read `felt_mapping.md` for styling patterns (if needed)
 4. Use `python_repl` to create the map (create → add layer → wait → style)
-5. Call `verify_map` with the URL
+5. Use `python_repl` to verify the map (see VERIFICATION section in felt_mapping.md)
 
 ## python_repl Environment (pre-loaded, no imports needed)
 - `psycopg2`, `os`, `json`, `time` — standard
@@ -123,95 +121,6 @@ for table, col in [("public.t1", "c1"), ("public.t2", "c2")]:
 """
 
 
-# ── Custom Tools ───────────────────────────────────────────────
-
-@tool
-def verify_map(map_url: str) -> str:
-    """Verify a Felt map has loaded correctly.
-
-    Checks layer status, feature counts, and styling via the Felt API.
-    Takes a headless browser screenshot if Playwright is available.
-    Call this AFTER creating and styling a map.
-
-    Args:
-        map_url: The full Felt map URL to verify.
-
-    Returns:
-        Verification report with layer details and any issues found.
-    """
-    import urllib.request
-    import json
-    import re
-    import time as _time
-
-    token = os.environ.get("FELT_API_TOKEN", "")
-    match = re.search(r'([A-Za-z0-9]{20,})$', map_url.rstrip("/"))
-    if not match:
-        return f"Could not extract map ID from URL: {map_url}"
-    map_id = match.group(1)
-
-    lines = ["## Map Verification\n"]
-
-    try:
-        req = urllib.request.Request(
-            f"https://felt.com/api/v2/maps/{map_id}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        map_data = json.loads(urllib.request.urlopen(req).read())
-
-        req2 = urllib.request.Request(
-            f"https://felt.com/api/v2/maps/{map_id}/layers",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        layers = json.loads(urllib.request.urlopen(req2).read())
-
-        lines.append(f"**Title:** {map_data.get('title', '?')}")
-        lines.append(f"**URL:** {map_data.get('url', '?')}")
-        lines.append(f"**Layers:** {len(layers)}\n")
-
-        issues = []
-        for layer in layers:
-            name = layer.get("name", "Unnamed")
-            status = layer.get("status", "?")
-            feat_count = layer.get("metadata", {}).get("feature_count")
-            style_type = layer.get("style", {}).get("type", "none")
-            lines.append(f"- **{name}**: status={status}, features={feat_count or '?'}, style={style_type}")
-            if status == "failed":
-                issues.append(f"Layer '{name}' failed to process")
-
-        if issues:
-            lines.append("\n⚠️ **Issues:**")
-            for issue in issues:
-                lines.append(f"  - {issue}")
-
-    except Exception as e:
-        lines.append(f"API check failed: {e}")
-        issues = [str(e)]
-
-    # Screenshot (best-effort)
-    screenshots_dir = Path(__file__).parent.parent / "data" / "screenshots"
-    screenshots_dir.mkdir(parents=True, exist_ok=True)
-    screenshot_path = screenshots_dir / f"{map_id}.png"
-
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-            page = browser.new_page(viewport={"width": 1400, "height": 900})
-            page.goto(map_url, timeout=30000)
-            _time.sleep(10)
-            page.screenshot(path=str(screenshot_path), full_page=False)
-            browser.close()
-        lines.append(f"\n📸 Screenshot: {screenshot_path}")
-    except Exception as e:
-        lines.append(f"\n📸 Screenshot skipped: {e}")
-
-    if not issues:
-        lines.append("\n✅ Map verified successfully!")
-
-    return "\n".join(lines)
-
-
 # ── Agent Factory ──────────────────────────────────────────────
 
 def get_model():
@@ -231,7 +140,7 @@ def create_agent() -> Agent:
     agent = Agent(
         model=get_model(),
         system_prompt=SYSTEM_PROMPT,
-        tools=[python_repl, file_read, verify_map],
+        tools=[python_repl, file_read],
     )
 
     # Seed python_repl with imports and credentials
