@@ -32,7 +32,8 @@ SYSTEM_PROMPT = f"""You are a map builder agent. You create interactive Felt map
 3. Write Python code to query Aurora and create a Felt map
 4. Execute the code with run_python
 5. Return the Felt map URL
-6. If no matching data exists, tell the user what IS available and suggest alternatives
+6. **Call verify_map** with the URL to confirm layers loaded and styling applied
+7. If no matching data exists, tell the user what IS available and suggest alternatives
 
 ## Available Skill Docs (read with file_read before writing code)
 - `{SKILLS_DIR}/aurora_postgis.md` — How to discover schemas, query PostGIS, available tables
@@ -134,6 +135,84 @@ def check_data(query: str) -> str:
         return f"ERROR checking data: {e}"
 
 
+@tool
+def verify_map(map_url: str) -> str:
+    """Verify a Felt map was created correctly by checking its metadata and thumbnail.
+
+    Call this AFTER creating and styling a map. It fetches the map's
+    metadata (title, layers, thumbnail) from the Felt API to confirm
+    everything was set up properly.
+
+    Args:
+        map_url: The Felt map URL to verify.
+
+    Returns:
+        Map verification summary including layer count, feature counts,
+        thumbnail URL, and any issues detected.
+    """
+    import urllib.request
+    import json
+    import re
+
+    token = os.environ.get("FELT_API_TOKEN", "")
+
+    # Extract map ID from URL
+    match = re.search(r'([A-Za-z0-9]{20,})$', map_url.rstrip("/"))
+    if not match:
+        return f"Could not extract map ID from URL: {map_url}"
+    map_id = match.group(1)
+
+    try:
+        # Get map metadata
+        req = urllib.request.Request(
+            f"https://felt.com/api/v2/maps/{map_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        map_data = json.loads(urllib.request.urlopen(req).read())
+
+        # Get layers
+        req2 = urllib.request.Request(
+            f"https://felt.com/api/v2/maps/{map_id}/layers",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        layers = json.loads(urllib.request.urlopen(req2).read())
+
+        # Build verification report
+        lines = [
+            f"## Map Verification",
+            f"- **Title:** {map_data.get('title', '?')}",
+            f"- **URL:** {map_data.get('url', '?')}",
+            f"- **Thumbnail:** {map_data.get('thumbnail_url', 'not yet generated')}",
+            f"- **Layers:** {len(layers)}",
+        ]
+
+        issues = []
+        for layer in layers:
+            name = layer.get("name", "Unnamed")
+            status = layer.get("status", "?")
+            feat_count = layer.get("metadata", {}).get("feature_count")
+            style_type = layer.get("style", {}).get("type", "none")
+
+            lines.append(f"  - **{name}**: status={status}, features={feat_count or '?'}, style={style_type}")
+
+            if status == "failed":
+                issues.append(f"Layer '{name}' failed to process")
+            if style_type == "simple" and feat_count and feat_count > 1:
+                issues.append(f"Layer '{name}' has default styling — consider applying categorical or numeric style")
+
+        if issues:
+            lines.append(f"\n⚠️ **Issues found:**")
+            for issue in issues:
+                lines.append(f"  - {issue}")
+        else:
+            lines.append(f"\n✅ **Map looks good!** All layers processed and styled.")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Verification failed: {e}"
+
+
 _exec_globals = {"__builtins__": __builtins__}
 
 
@@ -187,7 +266,7 @@ def create_agent() -> Agent:
     return Agent(
         model=get_model(),
         system_prompt=SYSTEM_PROMPT,
-        tools=[check_data, file_read, run_python],
+        tools=[check_data, file_read, run_python, verify_map],
     )
 
 
