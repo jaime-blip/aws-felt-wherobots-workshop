@@ -28,9 +28,14 @@ The `workshop` schema contains the Gold layer risk tables from Part 1:
 - `workshop.capmarkets_signals` — Capital markets signals
 - `workshop.energy_infra_risk` — Energy infrastructure risk
 
-When querying these tables for Felt source layers, use the `workshop.` schema prefix:
+When querying via **psycopg2** (data discovery), use the full schema prefix:
 ```sql
 SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'
+```
+
+When querying via **Felt source layers** (`add_source_layer`), use just the table name — the Workshop source already has the schema set:
+```sql
+SELECT * FROM insurance_exposure WHERE risk_tier = 'Critical'
 ```
 
 ## Step 1: Find All Spatial Tables
