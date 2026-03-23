@@ -32,7 +32,7 @@ from strands_tools import file_read, python_repl
 
 # ── Constants ──────────────────────────────────────────────────
 SKILLS_DIR = Path(__file__).parent / "skills"
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
+SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "rYZY3hxzTJCJnEZP2k1r0B")
 
 # ── Skills Plugin ──────────────────────────────────────────────
 skills_plugin = AgentSkills(skills=str(SKILLS_DIR))
@@ -81,7 +81,7 @@ SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interacti
 m = create_map(title="My Map", api_token=TOKEN)
 map_id, map_url = m["id"], m["url"]
 
-params = {{"from": "sql", "source_id": SOURCE_ID, "query": "SELECT * FROM public.my_table"}}
+params = {{"from": "sql", "source_id": SOURCE_ID, "query": "SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'"}}
 add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
 
 layer = wait_for_layer(map_id)
