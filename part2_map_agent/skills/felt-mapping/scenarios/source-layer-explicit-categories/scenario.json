@@ -1,0 +1,15 @@
+{
+  "prompt": "Create a map of smoke density data from the database. Style it with explicit categories: Light (yellow), Medium (orange), Heavy (dark red), with semi-transparent fill.",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map()",
+    "Must call add_source_layer() with SQL query for smoke density",
+    "Must wait for layer processing before styling",
+    "Must call update_layer_style() with categorical FSL",
+    "FSL categories must be an explicit array ['Light', 'Medium', 'Heavy'] (not top-N shortcut)",
+    "FSL paint.color must be an array of 3 colors matching the categories",
+    "Colors must progress from yellow/light to red/dark",
+    "Opacity must be less than 1.0 (semi-transparent)",
+    "FSL must include version '2.3.1'"
+  ]
+}

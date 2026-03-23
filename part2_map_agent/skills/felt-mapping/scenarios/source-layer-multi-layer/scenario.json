@@ -1,0 +1,13 @@
+{
+  "prompt": "Create a map with two layers: wildfire perimeters colored by category, and national parks colored by region. Both from the database using SQL source layers.",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map() to create a single map",
+    "Must call add_source_layer() twice (one per table)",
+    "Must use 'from': 'sql' with source_id for both layers",
+    "Must call wait_for_layer() or poll after EACH add_source_layer() before styling",
+    "Must call update_layer_style() for each layer with appropriate styling",
+    "Must NOT create two separate maps",
+    "Must print the map URL at the end"
+  ]
+}

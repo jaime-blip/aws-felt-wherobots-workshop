@@ -1,0 +1,13 @@
+{
+  "prompt": "Create a Felt map showing wildfire locations from the database, styled by fire cause category using the SQL source layer approach.",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map() to create a new map",
+    "Must call add_source_layer() with 'from': 'sql' and a source_id",
+    "Must include a SQL query selecting from a wildfire table",
+    "Must call wait_for_layer() or poll list_layers() until status is 'completed' before styling",
+    "Must call update_layer_style() with FSL styling",
+    "FSL style must be type 'categorical' with a fire cause attribute",
+    "Must print the map URL at the end"
+  ]
+}

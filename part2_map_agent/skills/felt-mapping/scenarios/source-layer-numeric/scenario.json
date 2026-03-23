@@ -1,0 +1,14 @@
+{
+  "prompt": "Create a map showing air quality data from the database, styled with a numeric gradient on the gridcode column.",
+  "output_type": "PYTHON",
+  "criteria": [
+    "Must call create_map() to create a new map",
+    "Must call add_source_layer() with 'from': 'sql' and source_id",
+    "Must include a SQL query selecting from an air quality table",
+    "Must wait for layer processing before styling",
+    "Must call update_layer_style() with FSL styling",
+    "FSL style must be type 'numeric' with numericAttribute set to 'gridcode' or similar",
+    "FSL must include a sequential color palette (like '@ylRed' or similar)",
+    "Must print the map URL"
+  ]
+}
