@@ -92,8 +92,8 @@ source = create_source(
     connection={
         "type": "postgresql",
         "host": "dpg-cs6np65umphs73e7tkog-a.oregon-postgres.render.com",
-        "database": "sales_engineers",
-        "user": "sales_engineers_user",
+        "database": "main",
+        "user": "readonly",
         "password": "...",
         "schema": "public"
     }
@@ -158,9 +158,9 @@ Agent does:
 
 ## Credentials
 ```
-FELT_API_TOKEN=felt_pat_IBAiwDtnIUN6sNCBOssJXG5DJWXDun7aaODueyKnYlk
-WHEROBOTS_API_KEY=19e484ca-8088-4b22-b920-f0600a64dc26
-AURORA_DSN=postgresql://sales_engineers_user:ZwIZ5dUqaAwfUlgirLoStAHzIMrY0f99@dpg-cs6np65umphs73e7tkog-a.oregon-postgres.render.com/sales_engineers
+FELT_API_TOKEN=<your-felt-api-token>
+WHEROBOTS_API_KEY=<your-wherobots-api-key>
+AURORA_DSN=postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main
 ```
 
 ## Existing Resources

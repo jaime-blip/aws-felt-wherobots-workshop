@@ -68,12 +68,12 @@ Edit `.env` with your credentials:
 WHEROBOTS_API_KEY=your-wherobots-api-key
 
 # Amazon Aurora PostgreSQL (PostGIS)
-AURORA_DSN=postgresql://postgres:eqoHHPZXK4sDerAqqwaj@db3.sales.felt.com:5432/main
+AURORA_DSN=postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main
 POSTGRES_HOST=db3.sales.felt.com
 POSTGRES_PORT=5432
 POSTGRES_DB=main
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your-password
+POSTGRES_USER=readonly
+POSTGRES_PASSWORD=LhxfvetErTSA2Dw8CGPakW
 
 # Felt
 FELT_API_TOKEN=your-felt-api-token
@@ -90,7 +90,7 @@ AWS_DEFAULT_REGION=us-west-2
 ```bash
 python3 -c "
 import psycopg2
-conn = psycopg2.connect('postgresql://postgres:eqoHHPZXK4sDerAqqwaj@db3.sales.felt.com:5432/main')
+conn = psycopg2.connect('postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main')
 cur = conn.cursor()
 cur.execute(\"SELECT tablename FROM pg_tables WHERE schemaname='workshop'\")
 print('Tables:', [r[0] for r in cur.fetchall()])
@@ -221,7 +221,7 @@ The Gold tables have been written to Aurora PostgreSQL in the `workshop` schema.
 ```bash
 python3 -c "
 import psycopg2
-conn = psycopg2.connect('postgresql://postgres:eqoHHPZXK4sDerAqqwaj@db3.sales.felt.com:5432/main')
+conn = psycopg2.connect('postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main')
 cur = conn.cursor()
 for table in ['insurance_exposure', 'cre_risk', 'capmarkets_signals', 'energy_infra_risk']:
     cur.execute(f'SELECT COUNT(*) FROM workshop.{table}')

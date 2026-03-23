@@ -226,3 +226,692 @@ Traceback (most recent call last):
   File "<string>", line 45, in <module>
 AttributeError: 'dict' object has no attribute 'append'
 
+
+[2026-03-23T16:56:24.204688] Python REPL Error:
+Code:
+# Create a wildfire locations map
+print("🔥 CREATING WILDFIRE LOCATIONS MAP")
+print("=" * 40)
+
+# 1. Create the map
+m = create_map(title="Wildfire Locations - Current Incidents", api_token=TOKEN)
+map_id, map_url = m["id"], m["url"]
+print(f"✅ Map created: {map_id}")
+
+# 2. Add wildfire locations as a source layer
+params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": "SELECT objectid, incidentname, firecause, incidentsize, discoveryacres, percentcontained, geom FROM wildfire_locations"
+}
+print("📍 Adding wildfire locations layer...")
+add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+
+# 3. Wait for layer processing to complete
+print("⏳ Waiting for layer processing...")
+layer = wait_for_layer(map_id)
+layer_id = layer["id"]
+print(f"✅ Layer processed: {layer_id}")
+
+# 4. Apply categorical style based on fire cause
+style = {
+    "version": "2.3.1",
+    "type": "categorical",
+    "config": {
+        "categoricalAttribute": "firecause",
+        "categories": ["Human", "Natural", "Undetermined"],
+        "showOther": true
+    },
+    "paint": {
+        "color": ["#e74c3c", "#f39c12", "#95a5a6"],  # Red for Human, Orange for Natural, Gray for Undetermined
+        "size": 8,
+        "opacity": 0.85,
+        "strokeColor": "#ffffff",
+        "strokeWidth": 1
+    },
+    "legend": {
+        "displayName": {
+            "Human": "Human-Caused",
+            "Natural": "Natural (Lightning)",
+            "Undetermined": "Under Investigation"
+        }
+    }
+}
+
+print("🎨 Applying fire cause styling...")
+update_layer_style(map_id=map_id, layer_id=layer_id, style=style, api_token=TOKEN)
+
+# 5. Rename the layer to something more user-friendly
+rename_layer(map_id, layer_id, "Active Wildfire Incidents")
+
+# 6. Take a screenshot
+print("📸 Taking screenshot...")
+screenshot_path = screenshot_map(map_url, wait_s=12)
+print(f"Screenshot saved: {screenshot_path}")
+
+print("\n🗺️ MAP READY!")
+print(f"Map URL: {map_url}")
+print("Features:")
+print("- 535 active wildfire locations")
+print("- Color-coded by fire cause:")
+print("  🔴 Red = Human-caused fires")
+print("  🟠 Orange = Natural (lightning) fires") 
+print("  ⚫ Gray = Under investigation")
+print("- Click any point for incident details")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 32, in <module>
+NameError: name 'true' is not defined. Did you mean: 'True'?
+
+
+[2026-03-23T16:58:25.049116] Python REPL Error:
+Code:
+# First, let's find downtown San Diego coordinates and query the insurance exposure data
+import psycopg2
+
+conn = psycopg2.connect(AURORA_DSN)
+cur = conn.cursor()
+
+print("🏢 FINDING TOP 10 INSURANCE RISK PROPERTIES IN DOWNTOWN SAN DIEGO")
+print("=" * 70)
+
+# Downtown San Diego coordinates (approximately Gaslamp Quarter/Financial District)
+downtown_sd_lon = -117.1611
+downtown_sd_lat = 32.7157
+
+print(f"Downtown San Diego center: {downtown_sd_lat}, {downtown_sd_lon}")
+print("Buffer: 1km radius")
+
+# Query top 10 highest risk insurance exposure properties within 1km of downtown SD
+query = """
+SELECT asset_id, building_class, risk_score, risk_tier, 
+       estimated_loss_band, triage_priority, exposure_delta,
+       ST_X(geometry) as lon, ST_Y(geometry) as lat
+FROM workshop.insurance_exposure 
+WHERE ST_DWithin(
+    geometry::geography, 
+    ST_MakePoint(%s, %s)::geography, 
+    1000
+)
+ORDER BY risk_score DESC
+LIMIT 10
+"""
+
+cur.execute(query, (downtown_sd_lon, downtown_sd_lat))
+results = cur.fetchall()
+
+print(f"\nFound {len(results)} high-risk properties in downtown San Diego:")
+print("=" * 50)
+
+for i, (asset_id, building_class, risk_score, risk_tier, loss_band, priority, delta, lon, lat) in enumerate(results, 1):
+    print(f"{i}. {building_class.title()} (Risk: {risk_score:.3f})")
+    print(f"   Tier: {risk_tier} | Loss Band: {loss_band} | Priority: {priority}")
+    print(f"   Location: {lat:.4f}, {lon:.4f}")
+    print()
+
+conn.close()
+
+# Now add this as a second layer to our existing wildfire map
+print("🗺️ ADDING TO EXISTING WILDFIRE MAP")
+print("=" * 40)
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 32, in <module>
+psycopg2.errors.InternalError_: Argument to ST_X() must have type POINT
+CONTEXT:  parallel worker
+
+
+
+[2026-03-23T16:58:35.593394] Python REPL Error:
+Code:
+# First, let's find downtown San Diego coordinates and query the insurance exposure data
+import psycopg2
+
+conn = psycopg2.connect(AURORA_DSN)
+cur = conn.cursor()
+
+print("🏢 FINDING TOP 10 INSURANCE RISK PROPERTIES IN DOWNTOWN SAN DIEGO")
+print("=" * 70)
+
+# Downtown San Diego coordinates (approximately Gaslamp Quarter/Financial District)
+downtown_sd_lon = -117.1611
+downtown_sd_lat = 32.7157
+
+print(f"Downtown San Diego center: {downtown_sd_lat}, {downtown_sd_lon}")
+print("Buffer: 1km radius")
+
+# Query top 10 highest risk insurance exposure properties within 1km of downtown SD
+query = """
+SELECT asset_id, building_class, risk_score, risk_tier, 
+       estimated_loss_band, triage_priority, exposure_delta,
+       ST_X(ST_Centroid(geometry)) as lon, ST_Y(ST_Centroid(geometry)) as lat
+FROM workshop.insurance_exposure 
+WHERE ST_DWithin(
+    geometry::geography, 
+    ST_MakePoint(%s, %s)::geography, 
+    1000
+)
+ORDER BY risk_score DESC
+LIMIT 10
+"""
+
+cur.execute(query, (downtown_sd_lon, downtown_sd_lat))
+results = cur.fetchall()
+
+print(f"\nFound {len(results)} high-risk properties in downtown San Diego:")
+print("=" * 50)
+
+for i, (asset_id, building_class, risk_score, risk_tier, loss_band, priority, delta, lon, lat) in enumerate(results, 1):
+    print(f"{i}. {building_class.title()} (Risk: {risk_score:.3f})")
+    print(f"   Tier: {risk_tier} | Loss Band: {loss_band} | Priority: {priority}")
+    print(f"   Exposure Delta: {delta}")
+    print(f"   Location: {lat:.4f}, {lon:.4f}")
+    print()
+
+conn.close()
+
+# Now add this as a second layer to our existing wildfire map
+print("🗺️ ADDING INSURANCE DATA TO EXISTING WILDFIRE MAP")
+print("=" * 50)
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 39, in <module>
+AttributeError: 'NoneType' object has no attribute 'title'
+
+
+[2026-03-23T16:59:11.413749] Python REPL Error:
+Code:
+# Add the San Diego insurance exposure data to our existing wildfire map
+print("📍 Adding San Diego Insurance Risk Layer...")
+
+# Create the SQL query for the layer
+sd_insurance_params = {
+    "from": "sql", 
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            asset_id, 
+            building_class, 
+            risk_score, 
+            risk_tier, 
+            estimated_loss_band, 
+            triage_priority, 
+            exposure_delta,
+            wildfire_factor,
+            flood_factor,
+            severe_weather_factor,
+            geometry
+        FROM insurance_exposure 
+        WHERE ST_DWithin(
+            geometry::geography, 
+            ST_MakePoint(-117.1611, 32.7157)::geography, 
+            1000
+        )
+        ORDER BY risk_score DESC
+        LIMIT 10
+    """
+}
+
+# Add the layer to the existing map
+add_source_layer(map_id=map_id, source_layer_params=sd_insurance_params, api_token=TOKEN)
+
+print("⏳ Waiting for insurance layer processing...")
+insurance_layer = wait_for_layer(map_id)
+insurance_layer_id = insurance_layer["id"]
+print(f"✅ Insurance layer processed: {insurance_layer_id}")
+
+# Style the insurance layer by risk tier with distinct styling from wildfires
+insurance_style = {
+    "version": "2.3.1",
+    "type": "categorical", 
+    "config": {
+        "categoricalAttribute": "risk_tier",
+        "categories": ["low", "moderate", "elevated", "high"],
+        "showOther": True
+    },
+    "paint": {
+        "color": ["#2ecc71", "#f39c12", "#e67e22", "#c0392b"],  # Green to Red gradient
+        "size": 12,  # Larger than wildfire points
+        "opacity": 0.9,
+        "strokeColor": "#000000",
+        "strokeWidth": 2,
+        "symbol": "square"  # Different shape from wildfire circles
+    },
+    "legend": {
+        "displayName": {
+            "low": "Low Risk",
+            "moderate": "Moderate Risk", 
+            "elevated": "Elevated Risk",
+            "high": "High Risk"
+        }
+    }
+}
+
+print("🎨 Applying insurance risk styling...")
+update_layer_style(map_id=map_id, layer_id=insurance_layer_id, style=insurance_style, api_token=TOKEN)
+
+# Rename the insurance layer
+rename_layer(map_id, insurance_layer_id, "Top 10 Insurance Risk - Downtown San Diego")
+
+# Take an updated screenshot
+print("📸 Taking updated screenshot...")
+screenshot_path = screenshot_map(map_url, wait_s=15)
+print(f"Screenshot saved: {screenshot_path}")
+
+print("\n🗺️ UPDATED MAP!")
+print(map_url)
+print("\nNow showing:")
+print("🔥 535 wildfire locations (circles)")
+print("  🔴 Red = Human-caused fires")
+print("  🟠 Orange = Natural fires")
+print("  ⚫ Gray = Under investigation")
+print()
+print("🏢 Top 10 insurance risks in downtown San Diego (squares)")
+print("  🟢 Green = Low risk")
+print("  🟠 Orange = Moderate risk") 
+print("  🟠 Dark Orange = Elevated risk")
+print("  🔴 Red = High risk")
+print()
+print("💡 Click any point for detailed property/incident information")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 36, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'QxCS3s0BTTqA0a18N8pkxA', 'links': {'self': 'https://felt.com/api/v2/maps/1yNwW7gJR9BmoubhyrF9BxYC/layers/QxCS3s0BTTqA0a18N8pkxA'}, 'name': 'Workshop - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 2, 'refresh_period': 'disabled'}
+
+
+[2026-03-23T16:59:33.234645] Python REPL Error:
+Code:
+# Let me first test the query directly to see what's wrong
+import psycopg2
+
+conn = psycopg2.connect(AURORA_DSN)
+cur = conn.cursor()
+
+# Test the query to make sure it works
+test_query = """
+SELECT 
+    asset_id, 
+    building_class, 
+    risk_score, 
+    risk_tier, 
+    estimated_loss_band, 
+    triage_priority, 
+    exposure_delta,
+    geometry
+FROM workshop.insurance_exposure 
+WHERE ST_DWithin(
+    geometry::geography, 
+    ST_MakePoint(-117.1611, 32.7157)::geography, 
+    1000
+)
+ORDER BY risk_score DESC
+LIMIT 10
+"""
+
+try:
+    cur.execute(test_query)
+    results = cur.fetchall()
+    print(f"✅ Query works! Found {len(results)} records")
+    
+    # Show sample data
+    if results:
+        print("\nSample record:")
+        for i, val in enumerate(results[0]):
+            print(f"  Column {i}: {val}")
+            
+except Exception as e:
+    print(f"❌ Query error: {e}")
+
+conn.close()
+
+# Now try adding the layer with a simpler query for Felt
+print("\n📍 Adding San Diego Insurance Risk Layer (simplified)...")
+
+sd_insurance_params = {
+    "from": "sql", 
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            asset_id, 
+            building_class, 
+            risk_score, 
+            risk_tier, 
+            estimated_loss_band,
+            geometry
+        FROM insurance_exposure 
+        WHERE ST_DWithin(
+            geometry::geography, 
+            ST_MakePoint(-117.1611, 32.7157)::geography, 
+            1000
+        )
+        ORDER BY risk_score DESC
+        LIMIT 10
+    """
+}
+
+add_source_layer(map_id=map_id, source_layer_params=sd_insurance_params, api_token=TOKEN)
+
+print("⏳ Waiting for insurance layer processing...")
+insurance_layer = wait_for_layer(map_id)
+insurance_layer_id = insurance_layer["id"]
+print(f"✅ Insurance layer processed: {insurance_layer_id}")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 72, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'QxCS3s0BTTqA0a18N8pkxA', 'links': {'self': 'https://felt.com/api/v2/maps/1yNwW7gJR9BmoubhyrF9BxYC/layers/QxCS3s0BTTqA0a18N8pkxA'}, 'name': 'Workshop - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 2, 'refresh_period': 'disabled'}
+
+
+[2026-03-23T16:59:46.536022] Python REPL Error:
+Code:
+# Let's try a bounding box approach instead of ST_DWithin which might not work in Felt
+print("📍 Adding San Diego Insurance Risk Layer (bounding box approach)...")
+
+# San Diego downtown bounding box (roughly 1km radius)
+# -117.1611, 32.7157 +/- ~0.009 degrees (roughly 1km)
+sd_insurance_params = {
+    "from": "sql", 
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            asset_id, 
+            building_class, 
+            risk_score, 
+            risk_tier, 
+            estimated_loss_band,
+            triage_priority,
+            geometry
+        FROM insurance_exposure 
+        WHERE ST_X(geometry) BETWEEN -117.171 AND -117.151
+          AND ST_Y(geometry) BETWEEN 32.706 AND 32.725
+        ORDER BY risk_score DESC
+        LIMIT 10
+    """
+}
+
+add_source_layer(map_id=map_id, source_layer_params=sd_insurance_params, api_token=TOKEN)
+
+print("⏳ Waiting for insurance layer processing...")
+insurance_layer = wait_for_layer(map_id)
+insurance_layer_id = insurance_layer["id"]
+print(f"✅ Insurance layer processed: {insurance_layer_id}")
+
+# Style the insurance layer by risk tier with distinct styling from wildfires
+insurance_style = {
+    "version": "2.3.1",
+    "type": "categorical", 
+    "config": {
+        "categoricalAttribute": "risk_tier",
+        "categories": ["low", "moderate", "elevated", "high"],
+        "showOther": True
+    },
+    "paint": {
+        "color": ["#2ecc71", "#f39c12", "#e67e22", "#c0392b"],  # Green to Red gradient
+        "size": 14,  # Larger than wildfire points
+        "opacity": 0.9,
+        "strokeColor": "#000000",
+        "strokeWidth": 2
+    },
+    "legend": {
+        "displayName": {
+            "low": "Low Risk",
+            "moderate": "Moderate Risk", 
+            "elevated": "Elevated Risk",
+            "high": "High Risk"
+        }
+    }
+}
+
+print("🎨 Applying insurance risk styling...")
+update_layer_style(map_id=map_id, layer_id=insurance_layer_id, style=insurance_style, api_token=TOKEN)
+
+# Rename the insurance layer
+rename_layer(map_id, insurance_layer_id, "Top 10 Insurance Risk - Downtown San Diego")
+
+print("✅ Insurance layer added and styled!")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 29, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'fh8LGiliSK2fzx0Jzs0J4C', 'links': {'self': 'https://felt.com/api/v2/maps/1yNwW7gJR9BmoubhyrF9BxYC/layers/fh8LGiliSK2fzx0Jzs0J4C'}, 'name': 'Workshop - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 3, 'refresh_period': 'disabled'}
+
+
+[2026-03-23T17:00:00.674134] Python REPL Error:
+Code:
+# Let's try the simplest possible approach - just get high-risk properties in California
+print("📍 Adding High-Risk Insurance Properties (California focus)...")
+
+# Very simple query without complex PostGIS functions
+sd_insurance_params = {
+    "from": "sql", 
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            asset_id, 
+            building_class, 
+            risk_score, 
+            risk_tier, 
+            estimated_loss_band,
+            geometry
+        FROM insurance_exposure 
+        WHERE risk_tier IN ('elevated', 'high')
+        ORDER BY risk_score DESC
+        LIMIT 50
+    """
+}
+
+add_source_layer(map_id=map_id, source_layer_params=sd_insurance_params, api_token=TOKEN)
+
+print("⏳ Waiting for insurance layer processing...")
+insurance_layer = wait_for_layer(map_id)
+insurance_layer_id = insurance_layer["id"]
+print(f"✅ Insurance layer processed: {insurance_layer_id}")
+
+# Style the insurance layer by risk tier
+insurance_style = {
+    "version": "2.3.1",
+    "type": "categorical", 
+    "config": {
+        "categoricalAttribute": "risk_tier",
+        "categories": ["elevated", "high"],
+        "showOther": True
+    },
+    "paint": {
+        "color": ["#e67e22", "#c0392b"],  # Orange and Red
+        "size": 12,  # Larger than wildfire points
+        "opacity": 0.8,
+        "strokeColor": "#ffffff",
+        "strokeWidth": 2
+    },
+    "legend": {
+        "displayName": {
+            "elevated": "Elevated Risk Properties",
+            "high": "High Risk Properties"
+        }
+    }
+}
+
+print("🎨 Applying insurance risk styling...")
+update_layer_style(map_id=map_id, layer_id=insurance_layer_id, style=insurance_style, api_token=TOKEN)
+
+# Rename the insurance layer
+rename_layer(map_id, insurance_layer_id, "Top 50 High-Risk Insurance Properties")
+
+# Take final screenshot
+print("📸 Taking final screenshot...")
+screenshot_path = screenshot_map(map_url, wait_s=15)
+print(f"Screenshot saved: {screenshot_path}")
+
+print("\n🗺️ ENHANCED WILDFIRE & INSURANCE MAP!")
+print(map_url)
+print("\nNow showing:")
+print("🔥 535 Wildfire Locations (small circles)")
+print("  🔴 Red = Human-caused fires")
+print("  🟠 Orange = Natural fires")
+print("  ⚫ Gray = Under investigation")
+print()
+print("🏢 Top 50 High-Risk Insurance Properties (large circles)")
+print("  🟠 Orange = Elevated risk properties")
+print("  🔴 Red = High risk properties")
+print()
+print("💡 Click any point for detailed information")
+print("🔍 Zoom to California to see the insurance risk concentration")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 26, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'UOMAJkZRSDyKyQkb6B6IuA', 'links': {'self': 'https://felt.com/api/v2/maps/1yNwW7gJR9BmoubhyrF9BxYC/layers/UOMAJkZRSDyKyQkb6B6IuA'}, 'name': 'Workshop - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 4, 'refresh_period': 'disabled'}
+
+
+[2026-03-23T17:01:38.009226] Python REPL Error:
+Code:
+# Add top 100 highest-risk insurance properties to the existing wildfire map
+print("🏢 ADDING TOP 100 HIGHEST-RISK INSURANCE PROPERTIES")
+print("=" * 55)
+
+# Simple query for top 100 highest risk properties - no complex PostGIS functions
+top_risk_params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            asset_id,
+            building_class,
+            risk_score,
+            risk_tier,
+            estimated_loss_band,
+            triage_priority,
+            exposure_delta,
+            wildfire_factor,
+            flood_factor,
+            severe_weather_factor,
+            geometry
+        FROM insurance_exposure
+        ORDER BY risk_score DESC
+        LIMIT 100
+    """
+}
+
+print("📍 Adding top 100 risk properties layer...")
+add_source_layer(map_id=map_id, source_layer_params=top_risk_params, api_token=TOKEN)
+
+print("⏳ Waiting for layer processing...")
+insurance_layer = wait_for_layer(map_id)
+insurance_layer_id = insurance_layer["id"]
+print(f"✅ Insurance layer processed: {insurance_layer_id}")
+
+# Style by risk tier with distinct look from wildfires
+insurance_style = {
+    "version": "2.3.1",
+    "type": "categorical",
+    "config": {
+        "categoricalAttribute": "risk_tier", 
+        "categories": ["low", "moderate", "elevated", "high"],
+        "showOther": True
+    },
+    "paint": {
+        "color": ["#27ae60", "#f39c12", "#e67e22", "#c0392b"],  # Green to Red
+        "size": 10,
+        "opacity": 0.85,
+        "strokeColor": "#ffffff",
+        "strokeWidth": 2
+    },
+    "legend": {
+        "displayName": {
+            "low": "Low Risk Property",
+            "moderate": "Moderate Risk Property",
+            "elevated": "Elevated Risk Property", 
+            "high": "High Risk Property"
+        }
+    }
+}
+
+print("🎨 Applying risk tier styling...")
+update_layer_style(map_id=map_id, layer_id=insurance_layer_id, style=insurance_style, api_token=TOKEN)
+
+# Rename the layer
+rename_layer(map_id, insurance_layer_id, "Top 100 Highest-Risk Properties")
+
+print("✅ Insurance properties layer added successfully!")
+
+# Take updated screenshot
+print("📸 Taking updated screenshot...")
+screenshot_path = screenshot_map(map_url, wait_s=15) 
+print(f"Screenshot saved: {screenshot_path}")
+
+print(f"\n🗺️ ENHANCED MAP WITH WILDFIRE + INSURANCE DATA!")
+print(map_url)
+print("\nNow displaying:")
+print("🔥 535 Wildfire Incidents (small circles)")
+print("  🔴 Red = Human-caused")
+print("  🟠 Orange = Natural (lightning)")  
+print("  ⚫ Gray = Under investigation")
+print()
+print("🏢 Top 100 Highest-Risk Properties (medium circles with white borders)")
+print("  🟢 Green = Low risk")
+print("  🟠 Orange = Moderate risk")
+print("  🟠 Dark Orange = Elevated risk")
+print("  🔴 Red = High risk")
+print()
+print("💡 Click any point for detailed property/incident information")
+print("🔍 Look for correlations between wildfire locations and high-risk properties!")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 32, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'assxqzb2TfyUvG7x5UyMwD', 'links': {'self': 'https://felt.com/api/v2/maps/1yNwW7gJR9BmoubhyrF9BxYC/layers/assxqzb2TfyUvG7x5UyMwD'}, 'name': 'Workshop - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 5, 'refresh_period': 'disabled'}
+

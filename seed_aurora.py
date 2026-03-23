@@ -3,7 +3,7 @@
 import psycopg2, random, json
 random.seed(42)
 
-DSN = "postgresql://sales_engineers_user:ZwIZ5dUqaAwfUlgirLoStAHzIMrY0f99@dpg-cs6np65umphs73e7tkog-a.oregon-postgres.render.com/sales_engineers"
+DSN = "postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main"
 conn = psycopg2.connect(DSN)
 cur = conn.cursor()
 
