@@ -20,6 +20,19 @@ conn.close()
 
 `psycopg2`, `os`, and `AURORA_DSN` are pre-loaded in your environment.
 
+## Important: Workshop Data
+
+The `workshop` schema contains the Gold layer risk tables from Part 1:
+- `workshop.insurance_exposure` — Insurance risk scores (358K buildings)
+- `workshop.cre_risk` — Commercial real estate risk scores
+- `workshop.capmarkets_signals` — Capital markets signals
+- `workshop.energy_infra_risk` — Energy infrastructure risk
+
+When querying these tables for Felt source layers, use the `workshop.` schema prefix:
+```sql
+SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'
+```
+
 ## Step 1: Find All Spatial Tables
 
 ```python

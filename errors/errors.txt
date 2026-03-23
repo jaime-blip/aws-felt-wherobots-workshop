@@ -1,0 +1,228 @@
+
+[2026-03-23T16:28:08.225776] Python REPL Error:
+Code:
+# Add more layers to the existing national parks map and add a smiley face
+print("🗺️ Enhancing the National Parks map with additional data...")
+
+# Use the existing map
+map_id = "ebqOuIVwSMud9AqCTmy4kXD"
+map_url = f"https://felt.com/map/National-Park-Service-Properties-{map_id}"
+
+print(f"Adding to existing map: {map_id}")
+
+# 2. Add US Forest Service lands
+print("\n🌲 Adding US Forest Service lands...")
+usfs_params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            forestname as forest_name,
+            region as forest_region,
+            ROUND(gis_acres::numeric, 2) as acres,
+            geom
+        FROM public.federal_lands_usfs 
+        WHERE forestname IS NOT NULL
+    """
+}
+add_source_layer(map_id=map_id, source_layer_params=usfs_params, api_token=TOKEN)
+
+usfs_layer = wait_for_layer(map_id)
+usfs_style = categorical_style("forest_region", top_n=10)
+update_layer_style(map_id=map_id, layer_id=usfs_layer["id"], style=usfs_style, api_token=TOKEN)
+rename_layer(map_id, usfs_layer["id"], "US Forest Service Lands")
+print("✅ Added Forest Service lands by region")
+
+# 3. Add air quality monitoring stations  
+print("\n🌬️ Adding air quality monitoring...")
+aqi_params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            gridcode as aqi_value,
+            'Air Quality Monitor' as station_type,
+            geom
+        FROM public.airnow_air_quality_index
+    """
+}
+add_source_layer(map_id=map_id, source_layer_params=aqi_params, api_token=TOKEN)
+
+aqi_layer = wait_for_layer(map_id)
+aqi_style = numeric_style("aqi_value")
+update_layer_style(map_id=map_id, layer_id=aqi_layer["id"], style=aqi_style, api_token=TOKEN)
+rename_layer(map_id, aqi_layer["id"], "Air Quality Index")
+print("✅ Added air quality monitoring")
+
+# 4. Add wildfire locations (just a sample to not overwhelm)
+print("\n🔥 Adding recent wildfire incidents...")
+fire_params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": """
+        SELECT 
+            incidentname as fire_name,
+            percentcontained as percent_contained,
+            finalacres as acres_burned,
+            firecausegeneral as fire_cause,
+            geom
+        FROM public.wildfire_locations 
+        WHERE incidentname IS NOT NULL 
+        AND finalacres > 100
+        LIMIT 100
+    """
+}
+add_source_layer(map_id=map_id, source_layer_params=fire_params, api_token=TOKEN)
+
+fire_layer = wait_for_layer(map_id)
+fire_style = categorical_style("fire_cause", top_n=8)
+update_layer_style(map_id=map_id, layer_id=fire_layer["id"], style=fire_style, api_token=TOKEN)
+rename_layer(map_id, fire_layer["id"], "Major Fire Incidents")
+print("✅ Added major fire incidents")
+
+print("\n🙂 Now adding a smiley face in the center of the USA...")
+
+# 5. Add a smiley face in the geographic center of the USA (Lebanon, Kansas area)
+# Geographic center is approximately 39.8283° N, 98.5795° W
+smiley_params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,  
+    "query": """
+        SELECT 
+            'Geographic Center of USA! 😊' as description,
+            '🙂 Smiley Face' as marker_type,
+            ST_SetSRID(ST_MakePoint(-98.5795, 39.8283), 4326) as geom
+        UNION ALL
+        SELECT 
+            'Left Eye 👁️' as description,
+            '👁️ Eye' as marker_type,
+            ST_SetSRID(ST_MakePoint(-98.59, 39.835), 4326) as geom
+        UNION ALL
+        SELECT 
+            'Right Eye 👁️' as description, 
+            '👁️ Eye' as marker_type,
+            ST_SetSRID(ST_MakePoint(-98.57, 39.835), 4326) as geom
+        UNION ALL
+        SELECT 
+            'Smile 😊' as description,
+            '😊 Mouth' as marker_type,
+            ST_SetSRID(ST_MakePoint(-98.5795, 39.82), 4326) as geom
+    """
+}
+add_source_layer(map_id=map_id, source_layer_params=smiley_params, api_token=TOKEN)
+
+smiley_layer = wait_for_layer(map_id)
+smiley_style = categorical_style("marker_type", top_n=5)
+update_layer_style(map_id=map_id, layer_id=smiley_layer["id"], style=smiley_style, api_token=TOKEN)
+rename_layer(map_id, smiley_layer["id"], "😊 USA Smiley Face")
+print("✅ Added smiley face at geographic center!")
+
+print(f"\n📸 Taking updated screenshot...")
+screenshot_path = screenshot_map(map_url, wait_s=20)
+print(f"Screenshot saved: {screenshot_path}")
+
+print(f"\n🎉 Enhanced National Parks map completed!")
+print(f"Added layers: Forest Service lands, Air Quality monitoring, Fire incidents, and a smiley face!")
+print(f"\nUpdated map: {map_url}")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 74, in <module>
+  File "/Users/strabo/Projects/aws-geospatial-workshop/part2_map_agent/skills/felt-mapping/scripts/felt_helpers.py", line 60, in wait_for_layer
+    raise RuntimeError(f"Layer processing failed: {failed[0]}")
+RuntimeError: Layer processing failed: {'id': 'oGHpgFJyS9CiblobMGNs7dD', 'links': {'self': 'https://felt.com/api/v2/maps/ebqOuIVwSMud9AqCTmy4kXD/layers/oGHpgFJyS9CiblobMGNs7dD'}, 'name': 'Aurora 3 - CustomQuery', 'status': 'failed', 'type': 'layer', 'progress': 100, 'metadata': {}, 'style': {}, 'legend_visibility': 'show', 'hide_from_legend': False, 'geometry_type': None, 'subtitle': '', 'caption': '', 'ordering_key': 4, 'refresh_period': 'disabled'}
+
+
+[2026-03-23T16:43:28.339323] Python REPL Error:
+Code:
+# Look for all schemas and tables, not just the public schema
+import psycopg2, os
+conn = psycopg2.connect(AURORA_DSN)
+cur = conn.cursor()
+
+# First, let's see all schemas available
+print("📁 Available Schemas:")
+cur.execute("""
+    SELECT schema_name 
+    FROM information_schema.schemata 
+    WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1')
+    ORDER BY schema_name
+""")
+schemas = [r[0] for r in cur.fetchall()]
+for schema in schemas:
+    print(f"   {schema}")
+
+print("\n" + "="*60)
+
+# Now look for all spatial tables across all schemas
+print("🗺️  All Spatial Tables (all schemas):")
+cur.execute("""
+    SELECT c.table_schema, c.table_name, c.column_name, c.data_type
+    FROM information_schema.columns c
+    JOIN (
+        SELECT table_schema, table_name
+        FROM information_schema.columns WHERE udt_name = 'geometry'
+    ) g ON c.table_schema = g.table_schema AND c.table_name = g.table_name
+    WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+      AND c.table_name NOT IN ('geometry_columns', 'geography_columns',
+                               'spatial_ref_sys', 'raster_columns', 'raster_overviews')
+    ORDER BY c.table_schema, c.table_name, c.ordinal_position
+""")
+
+tables_by_schema = {}
+for schema, table, col, dtype in cur.fetchall():
+    if schema not in tables_by_schema:
+        tables_by_schema[schema] = {}
+    key = f"{schema}.{table}"
+    if key not in tables_by_schema[schema]:
+        tables_by_schema[schema][key] = {"cols": [], "geom": None}
+    if dtype == "USER-DEFINED":
+        tables_by_schema[schema][key]["geom"] = col
+    elif not col.startswith("felt:"):
+        tables_by_schema[schema][key].append((col, dtype))
+
+for schema_name, tables in tables_by_schema.items():
+    print(f"\n🏷️  Schema: {schema_name}")
+    print("-" * 40)
+    
+    for tbl, info in tables.items():
+        try:
+            cur.execute(f"SELECT COUNT(*) FROM {tbl}")
+            cnt = cur.fetchone()[0]
+            text_cols = [c[0] for c in info["cols"] if c[1] in ("text", "character varying")]
+            
+            print(f"📊 {tbl.split('.')[-1]}")
+            print(f"   Rows: {cnt:,}")
+            print(f"   Geometry: {info['geom']}")
+            print(f"   Columns: {', '.join(c[0] for c in info['cols'][:10])}")
+            
+            # Show sample values for first few text columns
+            for col in text_cols[:2]:
+                try:
+                    cur.execute(f'SELECT DISTINCT "{col}" FROM {tbl} WHERE "{col}" IS NOT NULL LIMIT 6')
+                    vals = [str(r[0])[:30] for r in cur.fetchall()]
+                    if vals:
+                        print(f"   {col}: {', '.join(vals)}")
+                except:
+                    pass
+            print()
+        except Exception as e:
+            print(f"   ⚠️  Error accessing {tbl}: {e}")
+
+conn.close()
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 45, in <module>
+AttributeError: 'dict' object has no attribute 'append'
+
