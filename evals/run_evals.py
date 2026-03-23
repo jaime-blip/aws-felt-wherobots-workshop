@@ -338,16 +338,21 @@ def main():
 
     args = parser.parse_args()
 
-    # Check for API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        console.print(
-            "[red]Error: ANTHROPIC_API_KEY environment variable not set[/red]"
-        )
-        console.print("\nSet it by running:")
-        console.print("  export ANTHROPIC_API_KEY=your-key-here")
-        console.print("\nOr source a .env file:")
-        console.print("  source .env && python evals/run_evals.py")
-        sys.exit(1)
+    # Check for credentials (Bedrock via AWS creds, or Anthropic API key)
+    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("AWS_ACCESS_KEY_ID"):
+        # Try default AWS credential chain (profile, instance role, etc.)
+        try:
+            import boto3
+            boto3.client("sts").get_caller_identity()
+        except Exception:
+            console.print(
+                "[red]Error: No LLM credentials found.[/red]"
+            )
+            console.print("\nEither set ANTHROPIC_API_KEY or configure AWS credentials for Bedrock:")
+            console.print("  export ANTHROPIC_API_KEY=your-key-here")
+            console.print("  # or")
+            console.print("  aws configure")
+            sys.exit(1)
 
     # Determine which skills to run
     if args.skill:

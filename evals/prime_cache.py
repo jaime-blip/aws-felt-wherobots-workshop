@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-from anthropic import Anthropic
+from llm import call_llm
 
 from runner import get_all_skills, get_skill_dir, load_skill
 
@@ -27,26 +27,18 @@ def prime_cache(skill_path: Path, model: str = "claude-sonnet-4-5-20250929") -> 
     """
     skill_prompt = load_skill(skill_path)
 
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
-    response = client.messages.create(
+    result = call_llm(
         model=model,
-        max_tokens=10,  # Minimal output needed
-        system=[
-            {
-                "type": "text",
-                "text": skill_prompt,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
         messages=[{"role": "user", "content": "Ready"}],
+        system=skill_prompt,
+        max_tokens=10,
     )
 
     return {
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
-        "cache_creation_tokens": getattr(response.usage, "cache_creation_input_tokens", 0),
-        "cache_read_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
+        "input_tokens": result["input_tokens"],
+        "output_tokens": result["output_tokens"],
+        "cache_creation_tokens": result.get("cache_creation_tokens", 0),
+        "cache_read_tokens": result.get("cache_read_tokens", 0),
     }
 
 
@@ -64,9 +56,9 @@ def main():
 
     args = parser.parse_args()
 
-    # Check for API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("Error: ANTHROPIC_API_KEY environment variable not set", file=sys.stderr)
+    # Check for credentials
+    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("AWS_ACCESS_KEY_ID"):
+        print("Error: No LLM credentials found (set ANTHROPIC_API_KEY or AWS credentials)", file=sys.stderr)
         sys.exit(1)
 
     # Determine which skills to prime

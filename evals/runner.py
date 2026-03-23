@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from anthropic import Anthropic
+from llm import call_llm
 
 
 RUNNER_PROMPT_TEMPLATE = """You are evaluating your knowledge based on the provided skill documentation.
@@ -179,47 +179,26 @@ def run_scenario(
         context_json=scenario.get("context_json", ""),
     )
 
-    # Call Claude API
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
-    start_time = time.time()
-
-    response = client.messages.create(
+    # Call LLM (Bedrock or Anthropic)
+    result = call_llm(
         model=model,
-        max_tokens=4096,
-        system=[
-            {
-                "type": "text",
-                "text": skill_prompt,
-                "cache_control": {"type": "ephemeral"}
-            }
-        ],
         messages=[{"role": "user", "content": user_message}],
+        system=skill_prompt,
+        max_tokens=4096,
     )
 
-    latency_ms = int((time.time() - start_time) * 1000)
-
-    # Extract text content
-    actual_output = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            actual_output += block.text
-
-    # Build token info with cache metrics
     tokens_info = {
-        "input": response.usage.input_tokens,
-        "output": response.usage.output_tokens,
+        "input": result["input_tokens"],
+        "output": result["output_tokens"],
     }
-
-    # Add cache metrics if available
-    if hasattr(response.usage, "cache_creation_input_tokens"):
-        tokens_info["cache_creation"] = response.usage.cache_creation_input_tokens
-    if hasattr(response.usage, "cache_read_input_tokens"):
-        tokens_info["cache_read"] = response.usage.cache_read_input_tokens
+    if result.get("cache_creation_tokens"):
+        tokens_info["cache_creation"] = result["cache_creation_tokens"]
+    if result.get("cache_read_tokens"):
+        tokens_info["cache_read"] = result["cache_read_tokens"]
 
     return {
-        "actual_output": actual_output,
-        "latency_ms": latency_ms,
+        "actual_output": result["text"],
+        "latency_ms": result["latency_ms"],
         "tokens": tokens_info,
     }
 

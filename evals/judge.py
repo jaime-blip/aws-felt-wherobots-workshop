@@ -5,7 +5,7 @@ import json
 import os
 from typing import Any
 
-from anthropic import Anthropic
+from llm import call_llm
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -118,30 +118,23 @@ def judge_response(
         reference=reference,
     )
 
-    # Call Claude API
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
-    response = client.messages.create(
+    # Call LLM (Bedrock or Anthropic)
+    result = call_llm(
         model=model,
-        max_tokens=4096,
         messages=[{"role": "user", "content": judge_prompt}],
+        max_tokens=4096,
     )
 
-    # Extract text content
-    judge_output = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            judge_output += block.text
+    judge_output = result["text"]
 
-    # Capture token usage
     judge_tokens = {
-        "input": response.usage.input_tokens,
-        "output": response.usage.output_tokens,
+        "input": result["input_tokens"],
+        "output": result["output_tokens"],
     }
-    if hasattr(response.usage, "cache_creation_input_tokens"):
-        judge_tokens["cache_creation"] = response.usage.cache_creation_input_tokens
-    if hasattr(response.usage, "cache_read_input_tokens"):
-        judge_tokens["cache_read"] = response.usage.cache_read_input_tokens
+    if result.get("cache_creation_tokens"):
+        judge_tokens["cache_creation"] = result["cache_creation_tokens"]
+    if result.get("cache_read_tokens"):
+        judge_tokens["cache_read"] = result["cache_read_tokens"]
 
     # Parse JSON response
     try:
