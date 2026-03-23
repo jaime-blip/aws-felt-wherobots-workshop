@@ -348,7 +348,7 @@ agent = Agent(
 
 ```bash
 # From the project root
-./run.sh "What data is available in the workshop schema?"
+./run.sh "Show me buildings with high insurance risk in San Diego, colored by risk tier"
 ```
 
 Or interactive mode:
@@ -356,29 +356,21 @@ Or interactive mode:
 ./run.sh
 ```
 
-The agent will:
-1. Activate the `aurora-postgis` skill
-2. Query `information_schema` to discover tables
-3. Report the 4 Gold tables with their columns and row counts
-
-### Step 4 — Create your first map
-
-```bash
-./run.sh "Show me buildings with critical insurance risk in San Diego, colored by risk tier"
-```
-
 **What happens behind the scenes:**
-1. Agent reads `aurora-postgis` and `felt-mapping` skills
-2. Generates Python that:
+1. The agent already knows the full schema (baked into its system prompt — no discovery needed)
+2. It activates the `felt-mapping` skill for styling instructions
+3. Generates Python that:
    - Creates a new Felt map centered on San Diego
-   - Adds a source layer with SQL: `SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'`
+   - Adds a source layer with SQL: `SELECT * FROM workshop.insurance_exposure WHERE risk_tier IN ('elevated','high') LIMIT 5000`
    - Waits for the layer to process
    - Applies categorical styling on `risk_tier`
    - Renames the layer from "Workshop - CustomQuery" to something meaningful
    - Takes a screenshot
-3. Returns the Felt map URL
+4. Returns the Felt map URL
 
-### Step 5 — Try more prompts
+> **Note:** Risk tiers in the data are: `low`, `moderate`, `elevated`, `high`. There is no "critical" tier.
+
+### Step 4 — Try more prompts
 
 ```bash
 # Compare risk across industry verticals
@@ -391,13 +383,13 @@ The agent will:
 ./run.sh "Show buildings with disruption probability above 0.5, colored by supply chain vulnerability"
 
 # Multi-layer map
-./run.sh "Create a map with two layers: critical insurance exposure in red, and elevated flood risk in blue"
+./run.sh "Create a map with two layers: high insurance exposure in red, and elevated flood risk in blue"
 
 # Spatial query
 ./run.sh "Show me the 100 highest-risk buildings within 5km of downtown San Diego"
 ```
 
-### Step 6 — Explore the Felt map
+### Step 5 — Explore the Felt map
 
 Each map URL opens an interactive Felt map where you can:
 - **Hover** over buildings to see risk scores and explanations
