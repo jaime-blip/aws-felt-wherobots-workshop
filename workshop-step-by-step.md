@@ -13,7 +13,7 @@
 Use the Wherobots MCP server to explore spatial data catalogs, run a medallion pipeline (Bronze → Silver → Gold), and write scored building risk data to Amazon Aurora PostgreSQL.
 
 **Part 2 — Map Builder AI Agent** (Strands + Bedrock + Felt)  
-Build an AI agent that takes natural language prompts like *"Show me buildings with critical wildfire risk in San Diego"* and creates styled, interactive Felt maps — powered by AWS Strands Agents SDK, Amazon Bedrock (Claude), and Felt's mapping API.
+Build an AI agent that takes natural language prompts like *"Show me buildings with high insurance risk in San Diego"* and creates styled, interactive Felt maps — powered by AWS Strands Agents SDK, Amazon Bedrock (Claude), and Felt's mapping API.
 
 ---
 
@@ -204,8 +204,7 @@ All Gold tables start from `asset_enriched` (the unified Silver table) and apply
 
 | Tier | Score Range |
 |---|---|
-| Critical | ≥ 0.80 |
-| High | 0.60 – 0.79 |
+| High | ≥ 0.60 |
 | Elevated | 0.40 – 0.59 |
 | Moderate | 0.20 – 0.39 |
 | Low | < 0.20 |
@@ -241,7 +240,7 @@ GROUP BY risk_tier ORDER BY avg_risk DESC;
 -- Top 20 highest-risk buildings for CRE
 SELECT asset_id, building_class, risk_score, risk_tier, acquisition_screen_flag
 FROM workshop.cre_risk
-WHERE risk_tier IN ('Critical', 'High')
+WHERE risk_tier IN ('elevated', 'high')
 ORDER BY risk_score DESC LIMIT 20;
 
 -- Energy infrastructure with high outage probability
@@ -277,7 +276,7 @@ This is NOT a traditional tool-calling agent with hardcoded functions — it rea
 ### Architecture
 
 ```
-User: "Show me buildings with critical wildfire risk"
+User: "Show me buildings with high wildfire risk"
                     │
                     ▼
         ┌───────────────────────┐
@@ -437,7 +436,7 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 | `AccessDeniedException` from Bedrock | Check IAM permissions + enable Claude model access in Bedrock console |
 | Wherobots MCP not connecting | Verify API key and `https://api.cloud.wherobots.com/mcp/` URL |
 | Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this, wait a few seconds |
-| Agent generates wrong SQL | It may not know the schema — ask it to discover tables first |
+| Agent generates wrong SQL | Schema is baked into the system prompt — check `agent.py` for the table definitions |
 | `ModuleNotFoundError` | Activate virtualenv: `source .venv/bin/activate` |
 | Agent uses wrong source ID | Check `FELT_SOURCE_ID` in `.env` — should point to the Workshop source |
 
