@@ -20,7 +20,7 @@ from felt_python import (
 )
 
 TOKEN = os.environ.get("FELT_API_TOKEN")
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "e5UKkPZxTwiR9CxbRzFw9AZA")
+SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "rYZY3hxzTJCJnEZP2k1r0B")
 
 
 # ── Layer Processing ──────────────────────────────────────────
@@ -56,7 +56,8 @@ def wait_for_layer(map_id: str, timeout_s: int = 90, poll_interval: int = 3, exp
         processing = [l for l in layers if l.get("status") == "processing"]
         failed = [l for l in layers if l.get("status") == "failed"]
 
-        if failed:
+        # Only fail if ALL layers failed and none are processing
+        if failed and not processing and not completed:
             raise RuntimeError(f"Layer processing failed: {failed[0]}")
 
         if expect_count and len(completed) >= expect_count:

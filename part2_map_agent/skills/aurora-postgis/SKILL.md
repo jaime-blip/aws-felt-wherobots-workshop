@@ -33,10 +33,11 @@ When querying via **psycopg2** (data discovery), use the full schema prefix:
 SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'
 ```
 
-When querying via **Felt source layers** (`add_source_layer`), use just the table name — the Workshop source already has the schema set:
+When querying via **Felt source layers** (`add_source_layer`), ALWAYS use the `workshop.` schema prefix:
 ```sql
-SELECT * FROM insurance_exposure WHERE risk_tier = 'Critical'
+SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'Critical'
 ```
+⚠️ Bare table names without the schema prefix will FAIL.
 
 ## Step 1: Find All Spatial Tables
 
