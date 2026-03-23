@@ -13,6 +13,7 @@ import time
 import json
 from felt_python import (
     create_map,
+    update_layers,
     add_source_layer,
     list_layers,
     update_layer_style,
@@ -70,6 +71,22 @@ def wait_for_layer(map_id: str, timeout_s: int = 90, poll_interval: int = 3, exp
 
 
 # ── Map Creation Pipeline ─────────────────────────────────────
+
+def rename_layer(map_id: str, layer_id: str, name: str) -> None:
+    """Rename a layer on a map.
+
+    Args:
+        map_id: Felt map ID.
+        layer_id: Layer ID to rename.
+        name: New layer name.
+    """
+    update_layers(
+        map_id=map_id,
+        layer_params_list=[{"id": layer_id, "name": name}],
+        api_token=TOKEN,
+    )
+    print(f"  Renamed layer to: {name}")
+
 
 def create_map_with_sql(
     title: str,

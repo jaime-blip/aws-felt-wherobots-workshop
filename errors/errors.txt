@@ -227,3 +227,132 @@ Traceback (most recent call last):
   File "<string>", line 42, in <module>
 KeyError: 'layer_id'
 
+
+[2026-03-23T02:22:55.218874] Python REPL Error:
+Code:
+# Create a comprehensive wildfire map with status colors and cost-based sizing
+print("🗺️ CREATING WILDFIRE LOCATIONS MAP...")
+
+# Create the map
+m = create_map(title="US Wildfire Locations - Status & Cost Analysis", api_token=TOKEN)
+map_id, map_url = m["id"], m["url"]
+print(f"📍 Map created: {map_url}")
+
+# Create SQL query with derived status field and proper cost handling
+sql_query = """
+SELECT 
+    fid,
+    incidentname,
+    incidenttypecategory,
+    percentcontained,
+    estimatedcosttodate,
+    incidentsize,
+    poostate as state,
+    poocounty as county,
+    firediscoverydatetime,
+    
+    -- Create a clear status field for coloring
+    CASE 
+        WHEN incidenttypecategory = 'RX' THEN 'Prescribed Burn'
+        WHEN percentcontained IS NULL OR percentcontained = 0 THEN 'Uncontained'
+        WHEN percentcontained > 0 AND percentcontained < 100 THEN 'Partially Contained'
+        WHEN percentcontained = 100 THEN 'Fully Contained'
+        ELSE 'Unknown'
+    END as fire_status,
+    
+    -- Cost categories for better legends
+    CASE 
+        WHEN estimatedcosttodate IS NULL THEN 'No Cost Data'
+        WHEN estimatedcosttodate = 0 THEN 'No Cost Yet'
+        WHEN estimatedcosttodate < 50000 THEN 'Under $50K'
+        WHEN estimatedcosttodate < 500000 THEN '$50K - $500K'
+        WHEN estimatedcosttodate < 5000000 THEN '$500K - $5M'
+        ELSE 'Over $5M'
+    END as cost_category,
+    
+    -- Use cost for sizing, but handle nulls
+    COALESCE(estimatedcosttodate, 0) as cost_for_sizing,
+    
+    geom
+FROM public.wildfire_locations
+"""
+
+# Add the source layer
+params = {
+    "from": "sql",
+    "source_id": SOURCE_ID,
+    "query": sql_query
+}
+add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+
+# Wait for processing
+print("⏳ Processing layer data...")
+layer = wait_for_layer(map_id)
+layer_id = layer["id"]
+print(f"✅ Layer ready: {layer['name']}")
+
+# Create custom categorical style for fire status with meaningful colors
+fire_status_style = {
+    "version": "2.3.1",
+    "type": "categorical",
+    "config": {
+        "categoricalAttribute": "fire_status",
+        "categories": ["Uncontained", "Partially Contained", "Fully Contained", "Prescribed Burn", "Unknown"],
+        "showOther": true
+    },
+    "paint": {
+        "color": ["#e74c3c", "#f39c12", "#2ecc71", "#3498db", "#95a5a6"],  # Red, Orange, Green, Blue, Gray
+        "size": 8,
+        "opacity": 0.8,
+        "strokeColor": "#ffffff",
+        "strokeWidth": 1
+    },
+    "legend": {
+        "displayName": {
+            "Uncontained": "🔥 Uncontained (0%)",
+            "Partially Contained": "⚠️ Partially Contained",
+            "Fully Contained": "✅ Fully Contained (100%)",
+            "Prescribed Burn": "🌲 Prescribed Burn",
+            "Unknown": "❓ Status Unknown"
+        }
+    }
+}
+
+# Apply the style
+update_layer_style(map_id=map_id, layer_id=layer_id, style=fire_status_style, api_token=TOKEN)
+print("✅ Applied fire status color styling")
+
+# Let's also verify the layer and show some statistics
+import urllib.request, json
+req = urllib.request.Request(
+    f"https://felt.com/api/v2/maps/{map_id}/layers",
+    headers={"Authorization": f"Bearer {TOKEN}"}
+)
+layers_response = json.loads(urllib.request.urlopen(req).read())
+
+for layer_info in layers_response:
+    feature_count = layer_info.get('metadata', {}).get('feature_count', '?')
+    print(f"📊 Layer: {layer_info['name']}")
+    print(f"   Status: {layer_info['status']}")
+    print(f"   Features: {feature_count}")
+
+print(f"\n🎯 INTERACTIVE MAP READY:")
+print(f"🔗 {map_url}")
+print(f"\n🎨 LEGEND:")
+print(f"   🔥 Red = Uncontained fires (0% contained)")
+print(f"   ⚠️ Orange = Partially contained fires") 
+print(f"   ✅ Green = Fully contained fires (100%)")
+print(f"   🌲 Blue = Prescribed burns")
+print(f"   ❓ Gray = Unknown status")
+print(f"\n💡 Click any fire to see details including cost estimates and incident info!")
+Error:
+Traceback (most recent call last):
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 676, in python_repl
+    repl_state.execute(code)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/Users/strabo/Projects/aws-geospatial-workshop/.venv/lib/python3.13/site-packages/strands_tools/python_repl.py", line 236, in execute
+    exec(code, self._namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 69, in <module>
+NameError: name 'true' is not defined. Did you mean: 'True'?
+
