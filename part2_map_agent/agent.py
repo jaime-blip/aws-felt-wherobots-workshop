@@ -93,7 +93,7 @@ print(f"✅ {{map_url}}")
 - Activate skills before writing code — don't guess at API patterns
 - Write the FULL pipeline in as few python_repl calls as possible
 - NEVER create more than ONE map per request
-- ALWAYS print the map URL
+- ALWAYS print the map URL on its own line with no markdown formatting (no ** or [] around it)
 - ALWAYS rename layers with `rename_layer()` — default names are ugly ("Aurora 3 - CustomQuery")
 """
 
