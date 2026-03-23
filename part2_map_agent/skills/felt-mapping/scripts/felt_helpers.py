@@ -88,6 +88,39 @@ def rename_layer(map_id: str, layer_id: str, name: str) -> None:
     print(f"  Renamed layer to: {name}")
 
 
+def screenshot_map(map_url: str, output_path: str = None, wait_s: int = 10) -> str:
+    """Take a screenshot of a Felt map using Playwright headless browser.
+
+    Args:
+        map_url: Felt map URL.
+        output_path: Where to save the PNG. If None, auto-generates in data/screenshots/.
+        wait_s: Seconds to wait for map tiles to load (default 10).
+
+    Returns:
+        Path to the saved screenshot.
+    """
+    from playwright.sync_api import sync_playwright
+    import re
+
+    if output_path is None:
+        match = re.search(r'([A-Za-z0-9]{10,})(?:\?|$)', map_url)
+        map_id = match.group(1) if match else "map"
+        screenshots_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "data", "screenshots")
+        os.makedirs(screenshots_dir, exist_ok=True)
+        output_path = os.path.join(screenshots_dir, f"{map_id}.png")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        page.goto(map_url, timeout=30000)
+        time.sleep(wait_s)
+        page.screenshot(path=output_path, full_page=False)
+        browser.close()
+
+    print(f"📸 Screenshot saved: {output_path}")
+    return output_path
+
+
 def create_map_with_sql(
     title: str,
     sql: str,

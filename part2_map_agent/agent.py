@@ -49,7 +49,7 @@ from felt_python import create_map, add_source_layer, list_layers, update_layer_
 
 import sys
 sys.path.insert(0, "{SKILLS_DIR / 'felt-mapping' / 'scripts'}")
-from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql, rename_layer
+from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql, rename_layer, screenshot_map
 
 TOKEN = os.environ.get("FELT_API_TOKEN", "")
 SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "{SOURCE_ID}")
@@ -73,6 +73,7 @@ SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interacti
 - `categorical_style(attribute, top_n=10)` — builds valid FSL
 - `numeric_style(attribute)` — builds valid FSL
 - `rename_layer(map_id, layer_id, name)` — rename a layer (default names are ugly)
+- `screenshot_map(map_url, wait_s=10)` — take a screenshot with headless Playwright, returns path
 - `TOKEN`, `SOURCE_ID` — Felt credentials
 
 ## Code Pattern (single layer)
@@ -86,6 +87,7 @@ add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
 layer = wait_for_layer(map_id)
 update_layer_style(map_id=map_id, layer_id=layer["id"], style=categorical_style("col", top_n=10), api_token=TOKEN)
 rename_layer(map_id, layer["id"], "My Layer Name")
+screenshot_map(map_url)
 print(f"✅ {{map_url}}")
 ```
 
@@ -95,6 +97,7 @@ print(f"✅ {{map_url}}")
 - NEVER create more than ONE map per request
 - ALWAYS print the map URL on its own line with no markdown formatting (no ** or [] around it)
 - ALWAYS rename layers with `rename_layer()` — default names are ugly ("Aurora 3 - CustomQuery")
+- ALWAYS take a screenshot at the end with `screenshot_map(map_url)` — shows the result
 """
 
 
