@@ -1,190 +1,31 @@
-# CLAUDE.md — Workshop Build Plan
+# Part 2 — Map Builder AI Agent
 
-## What This Is
-"From Satellite to Signal: Building a Geospatial Agentic AI Stack on AWS"
-90-minute hands-on workshop. Felt × Wherobots × AWS.
+See the root `CLAUDE.md` for the full project overview.
 
-### Three deliverables
-1. **GitHub repo** — working code, skills, .md instructions
-2. **Step-by-step workshop document** — AWS Workshop Studio format
-3. **Presentation** — later
+## Quick Reference
 
-## People
-- **Jaime** (Felt) — Owns workshop deliverable
-- **Pranav Toggi** (Wherobots) — Created Iceberg tables, Wherobots MCP expert
-- **Damion Harrylal** (AWS SA) — Workshop format owner, AWS credits/infra
-- **Sarab** (AWS) — Infrastructure, shared geospatial-change-detection-agent-gis repo
-- **Rajesh** (AWS) — Infrastructure
+- **Agent**: `agent.py` — Strands Agent (Bedrock Claude Sonnet) with python_repl + file_read + AgentSkills
+- **Skills**: `skills/aurora-postgis/` and `skills/felt-mapping/`
+- **Evals**: `evals/` — LLM-as-judge framework for testing skill quality
+- **Run**: `./run.sh "your prompt"` or `./run.sh` for interactive mode
 
-## Architecture Vision
-The agent model is **skills + .md files + code execution engine** — NOT wrapped @tool functions.
-The Strands agent reads skill docs, generates Python code, and executes it.
+## Architecture
 
 ```
-User prompt: "Show wildfire risk for Austin buildings"
-                    ↓
-           Strands Agent (Bedrock Claude)
-           reads: skills/*.md
-                    ↓
-           Generates Python code that:
-           1. Queries Aurora PostGIS (via psycopg2)
-           2. Calls felt-python to create map + upload + style
-                    ↓
-           Code execution engine runs it
-                    ↓
-           Returns Felt map URL
+User prompt → Strands Agent → reads skills/*.md → generates Python →
+  python_repl executes: psycopg2 → Aurora, felt_python → Map, FSL → Styling →
+  returns Felt map URL
 ```
 
-## Part 1 — Agentic Data Engineering (Wherobots MCP)
+## Data (pre-loaded in Aurora, `workshop` schema)
 
-### What Wherobots MCP Actually Is
-- **Hosted HTTP MCP server** at `https://api.cloud.wherobots.com/mcp/`
-- NOT a pip package — it's a remote server
-- Auth: API key passed in config
-- Capabilities: catalog exploration, spatial SQL generation, query execution
-- Works with VS Code extension or manual MCP config
-- Config for Claude Desktop / Strands:
-  ```json
-  {
-    "mcpServers": {
-      "wherobots": {
-        "url": "https://api.cloud.wherobots.com/mcp/",
-        "headers": {
-          "X-API-Key": "${WHEROBOTS_API_KEY}"
-        }
-      }
-    }
-  }
-  ```
+4 Gold tables, ~358K San Diego buildings each:
+- `workshop.insurance_exposure` — risk_tier, wildfire/flood/weather factors, triage_priority
+- `workshop.cre_risk` — acquisition_screen_flag, environmental_risk_index
+- `workshop.capmarkets_signals` — disruption_probability, supply_chain_vulnerability
+- `workshop.energy_infra_risk` — outage_probability, vegetation_encroachment_risk
 
-### Wherobots Table Paths (Pranav created these)
-| Dataset | WB Table Path |
-|---------|--------------|
-| NOAA Severe Weather | `org_catalog.noaa_swdi` |
-| MODIS Flood | `org_catalog.modis` |
-| USFS Wildfire | `org_catalog.wildfire_risk` |
-| Overture Buildings | `wherobots_open_data.overture_maps_foundation` |
+## MCP Servers
 
-### Medallion Pipeline
-- **Bronze**: Raw data from Wherobots catalog tables (as-is from S3)
-- **Silver**: Cleaned, standardized to COG + GeoParquet, spatial joins
-- **Gold**: Per-asset risk scores + score_explanation, written to Aurora PostgreSQL
-
-### JDBC Export to Aurora
-Sedona can write directly via JDBC:
-```sql
-CREATE TABLE aurora_export USING jdbc OPTIONS (
-  url 'jdbc:postgresql://{host}:5432/{db}',
-  dbtable 'public.building_risk',
-  user '{user}', password '{password}',
-  driver 'org.postgresql.Driver'
-) AS SELECT * FROM gold_building_risk;
-```
-
-## Part 2 — Map Builder AI Agent (Aurora + Felt MCP)
-
-### Felt Source Connection (SDK)
-Use `felt-python` `create_source()` to register Aurora as a live data source:
-```python
-from felt_python import create_source
-source = create_source(
-    name="Workshop Aurora PostGIS",
-    connection={
-        "type": "postgresql",
-        "host": "dpg-cs6np65umphs73e7tkog-a.oregon-postgres.render.com",
-        "database": "main",
-        "user": "readonly",
-        "password": "...",
-        "schema": "public"
-    }
-)
-# source["id"] → use for add_source_layer
-```
-
-Then add layers with SQL spatial filtering:
-```python
-from felt_python import add_source_layer
-response = add_source_layer(
-    map_id="...",
-    source_layer_params={
-        "from": "sql",
-        "source_id": source["id"],
-        "query": """
-            SELECT asset_id, ST_Transform(geometry, 4326) as geometry,
-                   risk_score, risk_category, dominant_hazard
-            FROM building_risk
-            WHERE risk_category = 'critical'
-        """
-    }
-)
-```
-
-### Felt Skills (from aws-workshop-felt-skills repo)
-Jaime's repo: https://github.com/jaime-blip/aws-workshop-felt-skills
-Contains:
-- `skills/felt-map-maker/SKILL.md` — Comprehensive felt-python + FSL skill doc
-- `skills/felt-map-maker/scripts/skill.py` — Helper functions
-- `skills/felt-js-sdk/` — JS SDK skill (not needed for this workshop)
-- `evals/` — Evaluation framework for skill testing
-- Multiple scenarios with reference implementations
-
-### Agent Architecture
-Strands agent with:
-1. **Skill .md files** that teach it how to use felt-python and PostGIS
-2. **Code execution** — agent writes and runs Python
-3. **No hardcoded @tool wrappers** — agent reads docs and generates code
-
-### Output
-Agent takes: `"Show wildfire risk for Austin buildings"`
-Agent does:
-1. Reads skill docs (PostGIS querying, Felt map creation, FSL styling)
-2. Generates Python that queries Aurora PostGIS
-3. Creates Felt map, adds source layer with SQL filter
-4. Applies FSL categorical styling (risk colors)
-5. Returns shareable Felt map URL
-
-## Gold Layer Output Schema
-| Field | Description |
-|-------|-------------|
-| asset_id | Unique building identifier |
-| geometry | PostGIS geometry (Point/Polygon, SRID 4326) |
-| event_window_start/end | Temporal bounds for event observation |
-| baseline_window_start/end | Temporal bounds for baseline comparison |
-| wildfire_factor | Normalized wildfire burn probability (0-1) |
-| flood_factor | Normalized flood extent/frequency (0-1) |
-| severe_weather_factor | Normalized severe weather density (0-1) |
-| risk_score | Composite weighted score |
-| score_explanation | JSON detailing contributing factors |
-
-## Credentials
-```
-FELT_API_TOKEN=<your-felt-api-token>
-WHEROBOTS_API_KEY=<your-wherobots-api-key>
-AURORA_DSN=postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main
-```
-
-## Existing Resources
-- **Jaime's felt-skills repo**: https://github.com/jaime-blip/aws-workshop-felt-skills
-- **Sarab's change detection agent**: `geospatial-change-detection-agent-gis-main.zip` (Slack — need Jaime to download)
-- **Wherobots MCP**: https://api.cloud.wherobots.com/mcp/ (HTTP server)
-- **Wherobots MCP docs**: https://docs.wherobots.com/develop/mcp/mcp-server-setup.md
-- **AWS Workshop format example**: https://catalog.us-east-1.prod.workshops.aws/workshops/7f1e393b-c2fd-4cc4-b4f9-8e75db2326eb
-- **Felt OpenAPI**: https://felt.com/api/v2/openapi.json
-
-## TODO
-- [ ] Get Sarab's zip from Slack (need auth'd download)
-- [ ] Test Wherobots MCP connection with our API key
-- [ ] Test queries against org_catalog tables (noaa_swdi, modis, wildfire_risk)
-- [ ] Test Aurora PostgreSQL connection (Render instance)
-- [ ] Test Felt create_source with PostgreSQL params
-- [ ] Build Part 1 notebooks using real Wherobots MCP
-- [ ] Build Part 2 agent with skills + code execution
-- [ ] Write step-by-step workshop document
-- [ ] Create architecture diagram
-
-## AgentCore — Not for Workshop, Mention in "Next Steps"
-- **Amazon Bedrock AgentCore** = infrastructure layer for deploying agents in production
-- Provides: Runtime (Starlette web server), Identity (auth), Memory (persistent), Tools (managed browser/code interpreter), Observability
-- **Overkill for workshop** — attendees are learning to build, not deploy
-- **Use in wrap-up slide**: "Ready to productionize? AgentCore handles runtime, identity, memory, and monitoring."
-- Package: `bedrock-agentcore` (pip installable, v1.4.7)
+- **Wherobots**: `https://api.cloud.wherobots.com/mcp/`
+- **Felt**: `https://felt.com/mcp`

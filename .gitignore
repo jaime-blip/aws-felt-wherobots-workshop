@@ -10,3 +10,6 @@ data/seed/*.sql
 .mcp.json
 CLAUDE.md
 transcripts/
+tmp/screenshots/*.png
+.playwright-mcp/
+*.png

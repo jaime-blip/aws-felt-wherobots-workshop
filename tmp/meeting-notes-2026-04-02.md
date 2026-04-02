@@ -4,20 +4,43 @@ Deck: https://docs.google.com/presentation/d/1qAiEdLfJEB4c5dYEAzQqFQ8LqhjAdxfern
 
 ---
 
-## 1/ Presentation & Demo Ownership (Proposed)
+## 1/ Presentation & Demo Ownership (from Notion meeting notes + deck structure)
 
-60-min format: 10 min overview, 5 min architecture, 30 min demo, 15 min workshop overview.
+**Event:** April 23, 2026 (two sessions: 2:45 PM UTC and 10:45 PM UTC)
+**Format:** 60 min (45 min presentation+demo, 15 min workshop kickoff)
+**Attendees get:** 72 hours after webinar to complete the workshop
+
+### Speaker Assignments
+- **Raj** (AWS) — Host, introductions
+- **Jaime** (Felt) — Primary presenter, narrative, demo
+- **Ben/Damien** (Wherobots) — Wherobots overview + demo
+- **Saurabh + Rajesh** (AWS) — Workshop lead engineers
+- **Jordan** (AWS) — Program manager, live polling
+- **Eliza** (AWS ISV) — Contact slide, marketplace links
+- **Patty** (AWS) — Industry messaging, distribution
+
+### Deck Flow (~30 slides)
 
 | Section | Speaker | Duration |
 |---------|---------|----------|
-| Welcome + Problem statement | Raj or Eliza (AWS) | 3 min |
-| Felt intro + customer story (ReGrid) | Jaime | 3 min |
-| Wherobots intro + marketplace | Ben | 3 min |
-| Joint architecture (AWS services diagram) | Damion | 5 min |
-| Demo Part 1: Wherobots MCP data pipeline | Pranav/Ben | 12-15 min |
-| Demo Part 2: MapBuilder agent -> Felt map | Jaime | 12-15 min |
-| Workshop overview + QR code | Sarab/Damion | 5 min |
-| Takeaways + call to action | Raj | 5 min |
+| Abstract + Speaker intros | Raj | 2 min |
+| Partnership & Contact info | Eliza | 2 min |
+| **Opening demo hook** (California wildfire → risk map) | Jaime | 5 min |
+| Live Poll #1 (GIS familiarity) | Jordan | 1 min |
+| GIS Level-Set (what is GIS?) | Jaime | 2 min |
+| Solution overview (Felt + Wherobots + AWS) | Jaime + Ben | 5 min |
+| Industry problem statements (Insurance, CRE, CapMkts, Energy) | Jaime | 3 min |
+| Architecture slide (medallion, AWS services) | Damion | 3 min |
+| **Detailed demo** (full pipeline walkthrough) | Jaime + Ben | 15 min |
+| Takeaways + AM guidance (how to identify opportunities) | Raj | 5 min |
+| **Workshop kickoff** (QR code, what you'll build) | Sarab/Rajesh | 10 min |
+| Appendix (additional industry detail) | — | — |
+
+### Key Messaging
+- Position as **data engineering platform** for geospatial, NOT "a GIS system"
+- Be ready for: "How are you different from Esri?" → cloud-native architecture
+- First 15 min critical for AMs before they drop off — front-load the business value
+- Deck uses Felt template; architecture slide uses AWS template
 
 ---
 
@@ -152,6 +175,28 @@ Live: type "Show me buildings at high wildfire risk in San Diego" --> Felt map a
 - QR code --> Felt free trial (Marketplace)
 - QR code --> Wherobots free trial (Marketplace)
 - "Email [contact] to schedule a guided workshop with your data"
+
+---
+
+## Bonus Idea: Full-Loop Agent Demo
+
+Jaime's idea: What if the agent could handle the FULL pipeline in one prompt?
+
+```
+User: "Find wildfire risk for buildings near Ramona, score them, push to Aurora, and create a map"
+  --> Agent uses Wherobots MCP to query burn probability
+  --> Writes scored results to Aurora via JDBC
+  --> Creates a Felt map with the results
+  --> Returns a shareable URL
+```
+
+This would collapse the Part 1 / Part 2 divide into a single agent flow.
+Could be the "closing demo" moment — after attendees have done both parts separately,
+show them what it looks like when one agent orchestrates the entire stack.
+
+Pros: Very impressive, shows the full agentic vision
+Cons: Complex to build reliably, longer latency, more failure modes
+Recommendation: Build it as a demo-only flow (not in workshop steps), test it heavily
 
 ---
 
