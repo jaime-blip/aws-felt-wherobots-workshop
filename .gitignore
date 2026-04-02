@@ -4,6 +4,8 @@ __pycache__/
 *.pyc
 data/*.geojson
 data/*.parquet
+data/seed/*.csv
+data/seed/*.sql
 .DS_Store
 .mcp.json
 CLAUDE.md

@@ -2,18 +2,37 @@
 
 **Turn raw geospatial data into intelligence.** Powered by Amazon Aurora PostgreSQL (PostGIS), Wherobots, and Felt.
 
-**Duration:** ~90 minutes  
+**Duration:** ~90 minutes
 **Level:** Intermediate (comfortable with Python & command line)
 
 ---
 
 ## What You'll Build
 
-**Part 1 — Agentic Data Engineering** (Wherobots MCP)  
-Use the Wherobots MCP server to explore spatial data catalogs, run a medallion pipeline (Bronze → Silver → Gold), and write scored building risk data to Amazon Aurora PostgreSQL.
+An end-to-end geospatial AI pipeline that scores **358,985 San Diego buildings** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
 
-**Part 2 — Map Builder AI Agent** (Strands + Bedrock + Felt)  
-Build an AI agent that takes natural language prompts like *"Show me buildings with high insurance risk in San Diego"* and creates styled, interactive Felt maps — powered by AWS Strands Agents SDK, Amazon Bedrock (Claude), and Felt's mapping API.
+**Part 1 — Agentic Data Engineering** (~35 min)
+Walk through a Wherobots MCP-powered medallion pipeline (Bronze → Silver → Gold) that turns satellite imagery and weather events into per-building risk scores stored in Aurora PostgreSQL.
+
+**Part 2 — Map Builder AI Agent** (~40 min)
+Run an AI agent that takes prompts like *"Show me buildings with high wildfire risk near Poway"* and creates styled, interactive Felt maps — powered by Strands Agents SDK, Amazon Bedrock (Claude), and Felt.
+
+---
+
+## The Data Story
+
+San Diego County sits at the intersection of three natural hazards:
+
+- **Wildfire** — The eastern hills (Poway, Ramona, Cleveland National Forest edge) are the wildland-urban interface where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods. **140 buildings** score as elevated wildfire risk (avg wildfire_factor: 0.62).
+- **Severe weather** — Santa Ana wind events and occasional hail affect **84% of all buildings** at some level.
+- **Flood** — Rare but catastrophic. A single building scores as the highest-risk asset in the entire dataset.
+
+The same building gets **different risk scores** depending on who's asking:
+- An **insurer** weights wildfire and flood equally (0.40/0.40) — they care about claims
+- A **real estate investor** weights severe weather highest (0.35) — they care about long-term value
+- An **energy company** weights wildfire at 0.40 — they care about grid infrastructure near vegetation
+
+This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 
 ---
 
@@ -24,12 +43,14 @@ Build an AI agent that takes natural language prompts like *"Show me buildings w
 | What | Where to get it | Used in |
 |---|---|---|
 | **Felt account** | [felt.com](https://felt.com) | Part 1 + 2 |
-| **Felt API token** | [felt.com/maps/latest/integrations](https://felt.com/maps/latest/integrations) — starts with `felt_pat_...` | Part 2 |
+| **Felt API token** | Felt → Settings → Integrations — starts with `felt_pat_...` | Part 2 |
 | **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) | Part 1 |
 | **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
-| **AWS account** | [aws.amazon.com](https://aws.amazon.com) | Part 1 + 2 |
+| **AWS account** | Pre-provisioned for the workshop | Part 1 + 2 |
 | **Aurora PostgreSQL** | Pre-provisioned for the workshop | Part 1 + 2 |
-| **AWS Bedrock model access** | AWS Console → Bedrock → Model access → enable **Claude Sonnet** in `us-west-2` | Part 2 |
+| **AWS Bedrock model access** | Pre-provisioned (Claude Sonnet in `us-west-2`) | Part 2 |
+
+> **Note:** For instructor-led workshops, API keys and AWS accounts are pre-provisioned. For self-service, follow the links above to create accounts.
 
 ### Software
 
@@ -38,12 +59,12 @@ Build an AI agent that takes natural language prompts like *"Show me buildings w
 | Python | 3.10+ | `python3 --version` |
 | pip | latest | `pip --version` |
 | git | any | `git --version` |
-| AWS CLI | v2 (recommended) | `aws --version` |
+| AWS CLI | v2 | `aws --version` |
 | Kiro IDE | latest | [kiro.dev](https://kiro.dev) (optional, recommended) |
 
 ---
 
-## Setup
+## Setup (~10 min)
 
 ### Step 1 — Clone & install
 
@@ -52,7 +73,7 @@ git clone https://github.com/jaime-blip/aws-felt-wherobots-workshop.git
 cd aws-felt-wherobots-workshop
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r part2_map_agent/requirements.txt
 ```
 
 ### Step 2 — Configure credentials
@@ -61,36 +82,56 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials:
+Edit `.env` with your credentials (provided by the instructor or from your own accounts):
 
 ```bash
 # Wherobots Cloud
 WHEROBOTS_API_KEY=your-wherobots-api-key
 
 # Amazon Aurora PostgreSQL (PostGIS)
-AURORA_DSN=postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main
-POSTGRES_HOST=db3.sales.felt.com
-POSTGRES_PORT=5432
-POSTGRES_DB=main
-POSTGRES_USER=readonly
-POSTGRES_PASSWORD=LhxfvetErTSA2Dw8CGPakW
+AURORA_DSN=postgresql://user:password@your-aurora-host:5432/workshop
 
 # Felt
 FELT_API_TOKEN=your-felt-api-token
-FELT_SOURCE_ID=rYZY3hxzTJCJnEZP2k1r0B
+FELT_SOURCE_ID=your-felt-source-id
 
 # AWS (for Bedrock)
 AWS_PROFILE=default
 AWS_DEFAULT_REGION=us-west-2
 ```
 
-### Step 3 — Verify connections
+### Step 3 — Configure MCP servers
+
+Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "wherobots": {
+      "url": "https://api.cloud.wherobots.com/mcp/",
+      "headers": {
+        "X-API-Key": "${WHEROBOTS_API_KEY}"
+      }
+    },
+    "felt": {
+      "url": "https://felt.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${FELT_API_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+### Step 4 — Verify connections
 
 **Aurora PostgreSQL:**
 ```bash
 python3 -c "
-import psycopg2
-conn = psycopg2.connect('postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main')
+import psycopg2, os
+from dotenv import load_dotenv
+load_dotenv()
+conn = psycopg2.connect(os.environ['AURORA_DSN'])
 cur = conn.cursor()
 cur.execute(\"SELECT tablename FROM pg_tables WHERE schemaname='workshop'\")
 print('Tables:', [r[0] for r in cur.fetchall()])
@@ -98,24 +139,28 @@ conn.close()
 "
 ```
 
-Expected output:
+**Expected output:**
 ```
 Tables: ['insurance_exposure', 'cre_risk', 'capmarkets_signals', 'energy_infra_risk']
 ```
 
-**AWS Bedrock:**
-```bash
-aws bedrock list-foundation-models --region us-west-2 \
-  --query "modelSummaries[?contains(modelId,'claude')]" --output table
-```
+**Wherobots MCP:** In your MCP chat, ask:
+> *"List available catalogs"*
+
+You should see `org_catalog` and `wherobots_open_data` in the response.
+
+**Felt MCP:** In your MCP chat, ask:
+> *"What maps do I have access to?"*
+
+You should see your Felt workspace maps listed.
 
 ---
 
-## Part 1: Agentic Data Engineering with Wherobots MCP (45 min)
+## Part 1: Agentic Data Engineering with Wherobots MCP (~35 min)
 
 ### Overview
 
-In this part, you'll use the **Wherobots MCP server** to explore spatial data catalogs and understand how raw geospatial data (satellite imagery, weather events, building footprints) gets processed through a medallion architecture into industry-scored risk tables.
+In this part, you'll walk through how the **Wherobots MCP server** was used to build a medallion data pipeline that transforms raw satellite and weather data into per-building risk scores. The data is already in Aurora PostgreSQL — you'll explore how it got there and what it means.
 
 ### Architecture
 
@@ -138,69 +183,78 @@ NOAA SWDI TVS ───┘
                               workshop schema
 ```
 
-### Step 1 — Connect to Wherobots MCP
+### Step 1 — Explore the data catalog with Wherobots MCP (10 min)
 
-The Wherobots MCP is a **hosted HTTP MCP server** — not a pip package. Configure it in your IDE (Kiro, VS Code, or Claude Desktop):
+The Wherobots MCP connects to a massive catalog of geospatial data. Let's explore what's available.
 
-```json
-{
-  "mcpServers": {
-    "wherobots": {
-      "url": "https://api.cloud.wherobots.com/mcp/",
-      "headers": {
-        "X-API-Key": "${WHEROBOTS_API_KEY}"
-      }
-    }
-  }
-}
-```
+**Try these prompts in your MCP chat:**
 
-Once connected, you can ask the MCP to explore data catalogs, generate spatial SQL, and execute queries on Wherobots Cloud (Apache Sedona).
+> *"What tables are available in org_catalog.noaa_swdi?"*
 
-### Step 2 — Explore the data catalog
+This shows the severe weather datasets: hail events, mesocyclone detections, and tornado vortex signatures.
 
-Use the Wherobots MCP to discover available datasets:
+> *"Describe the schema of wherobots_open_data.overture_maps_foundation.buildings_building"*
+
+This is the Overture Maps building footprint dataset — every building polygon in the world.
+
+> *"Show me 5 sample rows from org_catalog.noaa_swdi.hail where the geometry is within San Diego County"*
+
+This shows actual hail events with location, severity, and timestamp.
+
+**What you're seeing:** The Wherobots MCP queries metadata, not the full tables. Even tables with billions of rows respond instantly because it reads catalog metadata, not data.
+
+**Available datasets:**
 
 | Source | Catalog Table | Type | Description |
 |---|---|---|---|
-| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | Global building footprints |
-| USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid |
+| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 358K building footprints in San Diego |
+| USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid (32 GB) |
 | USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs |
 | MODIS Flood NRT | `org_catalog.modis.MCDWD_L3_F3_NRT` | Raster | Near real-time flood extent |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail events with severity |
-| NOAA SWDI — Structures | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone detections |
+| NOAA SWDI — Mesocyclone | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone detections |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado vortex signatures |
 
-Try asking the MCP:
-- *"What tables are available in org_catalog.noaa_swdi?"*
-- *"Describe the schema of the Overture buildings table"*
-- *"Show me 10 sample rows from the hail events table"*
+### Step 2 — Walkthrough: Bronze → Silver pipeline (10 min)
 
-### Step 3 — Understand the Silver layer (spatial joins)
+Open the notebook at `part1_data_engineering/bronze-to-silver.ipynb`. This was **generated by the Wherobots MCP** using the pipeline skill (`part1_data_engineering/skills/wherobots-pipeline/SKILL.md`).
 
-The Silver layer enriches each building with hazard data through spatial operations:
+The Silver layer enriches each building with hazard data through three spatial operations:
 
-**Wildfire exposure** — Zonal statistics (`RS_ZonalStats`) extract mean/max burn probability from USFS raster tiles overlapping each building footprint.
+**Wildfire exposure** — Zonal statistics (`RS_ZonalStats`):
+| Input | Operation | Output |
+|-------|-----------|--------|
+| Overture Buildings + USFS Burn Probability raster | Extract mean/max burn probability for each building footprint | `asset_wildfire_exposure` — wildfire_factor per building |
 
-**Flood exposure** — MODIS flood raster tiles are spatially joined to buildings. Aggregated across dates to get max flood extent, event count, and duration.
+> **Key insight:** A building near Poway might sit directly on high burn probability land, while its neighbor 200m away is shielded by a ridge. This is why nearby buildings get different scores.
 
-**Severe weather density** — KNN spatial join (`ST_KNN`) finds the 10 nearest severe weather events within 25 km of each building, then aggregates counts at 5 km and 25 km thresholds.
+**Flood exposure** — Spatial join + temporal aggregation:
+| Input | Operation | Output |
+|-------|-----------|--------|
+| Overture Buildings + MODIS Flood NRT raster (7 dates) | Join flood tiles to buildings, aggregate across dates | `asset_flood_exposure` — max flood extent, event count, duration |
 
-### Step 4 — Understand the Gold layer (industry scoring)
+**Severe weather density** — KNN spatial join (`ST_KNN`):
+| Input | Operation | Output |
+|-------|-----------|--------|
+| Overture Buildings + NOAA SWDI (hail, mesocyclone, TVS) | Find 10 nearest weather events within 25km | `asset_weather_density` — event counts at 5km and 25km thresholds |
 
-All Gold tables start from `asset_enriched` (the unified Silver table) and apply:
+> **Try it yourself:** Ask the Wherobots MCP: *"How many hail events occurred within 25km of downtown San Diego (32.72, -117.16) in the past year?"*
 
-1. **Min-max normalization** of each hazard metric to [0, 1]
-2. **Weighted composite score** — weights vary by industry vertical:
+### Step 3 — Walkthrough: Silver → Gold scoring (5 min)
 
-| Industry | Wildfire | Flood | Severe Weather |
-|---|---|---|---|
-| Insurance | 0.40 | 0.40 | 0.20 |
-| Commercial Real Estate | 0.30 | 0.35 | 0.35 |
-| Capital Markets | 0.20 | 0.30 | 0.50 |
-| Energy & Utilities | 0.40 | 0.20 | 0.40 |
+Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies a **4-step scoring framework**:
 
-3. **Risk tier classification:**
+**1. Normalize** — Min-max scale each hazard metric to [0, 1]
+**2. Weight** — Apply industry-specific weights:
+
+| Industry | Wildfire | Flood | Severe Weather | Why this weighting? |
+|---|---|---|---|---|
+| Insurance | 0.40 | 0.40 | 0.20 | Claims are driven by fire and flood |
+| Commercial Real Estate | 0.30 | 0.35 | 0.35 | Long-term value affected by all hazards |
+| Capital Markets | 0.20 | 0.30 | 0.50 | Operational disruption from weather events |
+| Energy & Utilities | 0.40 | 0.20 | 0.40 | Grid infrastructure near vegetation and storm paths |
+
+**3. Classify** — Assign risk tiers:
 
 | Tier | Score Range |
 |---|---|
@@ -209,62 +263,78 @@ All Gold tables start from `asset_enriched` (the unified Silver table) and apply
 | Moderate | 0.20 – 0.39 |
 | Low | < 0.20 |
 
-4. **Industry-specific derived metrics** (e.g., insurance `triage_priority`, CRE `acquisition_screen_flag`, capital markets `disruption_probability`, energy `outage_probability`)
+**4. Derive** — Compute industry-specific metrics (e.g., `triage_priority`, `outage_probability`)
+
+**The weighting matters:** The energy table shows **274,553 buildings as "elevated"** (vs only 140 for insurance) because energy weights both wildfire and weather at 0.40, pushing more buildings above the 0.40 threshold.
 
 > 📖 See `part1_data_engineering/data_dictionary.md` for the full schema and business logic of every table.
 
-### Step 5 — Explore the Gold tables in Aurora
+### Step 4 — Verify the Gold tables in Aurora (10 min)
 
-The Gold tables have been written to Aurora PostgreSQL in the `workshop` schema. Let's verify:
+The Gold tables were exported to Aurora PostgreSQL via JDBC. Let's verify and explore them.
 
+**Check row counts:**
 ```bash
 python3 -c "
-import psycopg2
-conn = psycopg2.connect('postgresql://readonly:LhxfvetErTSA2Dw8CGPakW@db3.sales.felt.com/main')
+import psycopg2, os
+from dotenv import load_dotenv
+load_dotenv()
+conn = psycopg2.connect(os.environ['AURORA_DSN'])
 cur = conn.cursor()
 for table in ['insurance_exposure', 'cre_risk', 'capmarkets_signals', 'energy_infra_risk']:
     cur.execute(f'SELECT COUNT(*) FROM workshop.{table}')
-    print(f'workshop.{table}: {cur.fetchone()[0]} rows')
+    print(f'workshop.{table}: {cur.fetchone()[0]:,} rows')
 conn.close()
 "
 ```
 
-Try some queries:
-
-```sql
--- Risk tier distribution for insurance
-SELECT risk_tier, COUNT(*) as buildings, ROUND(AVG(risk_score)::numeric, 3) as avg_risk
-FROM workshop.insurance_exposure
-GROUP BY risk_tier ORDER BY avg_risk DESC;
-
--- Top 20 highest-risk buildings for CRE
-SELECT asset_id, building_class, risk_score, risk_tier, acquisition_screen_flag
-FROM workshop.cre_risk
-WHERE risk_tier IN ('elevated', 'high')
-ORDER BY risk_score DESC LIMIT 20;
-
--- Energy infrastructure with high outage probability
-SELECT asset_id, risk_score, outage_probability, vegetation_encroachment_risk
-FROM workshop.energy_infra_risk
-WHERE outage_probability > 0.5
-ORDER BY outage_probability DESC LIMIT 20;
+**Expected output:**
 ```
+workshop.insurance_exposure: 358,985 rows
+workshop.cre_risk: 358,985 rows
+workshop.capmarkets_signals: 358,985 rows
+workshop.energy_infra_risk: 358,985 rows
+```
+
+**Explore the risk distribution:**
+
+Ask the Felt MCP (or run these SQL queries directly):
+
+> *"Query the Workshop Aurora data source: show me the risk tier distribution for insurance_exposure — count of buildings and average score per tier"*
+
+You should see:
+
+| Tier | Buildings | Avg Score | Dominant Driver |
+|------|----------|-----------|-----------------|
+| high | 1 | 0.600 | Flood + severe weather |
+| elevated | 140 | 0.447 | Wildfire (avg 0.62) |
+| moderate | 274,613 | 0.201 | Severe weather |
+| low | 84,231 | 0.064 | Low all factors |
+
+**What to notice:**
+- Most buildings score `low` or `moderate` — San Diego's risk is **localized, not widespread**
+- The **140 elevated buildings** cluster near Poway and Ramona — the wildland-urban interface where dry brush meets residential development
+- **84% of buildings** have significant severe weather exposure (Santa Ana winds, occasional hail) — that's the baseline
+- Different industry tables weight the **same hazards differently** — a building that's `elevated` for insurance may be only `moderate` for CRE
+
+> **Try it:** *"Query Workshop Aurora: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
 
 ### Key Takeaways — Part 1
 
-- **Wherobots MCP** gives you an AI-accessible interface to spatial data catalogs and processing
+- **Wherobots MCP** gives you an AI-accessible interface to spatial data catalogs and processing — you didn't write Sedona code by hand
 - The **medallion architecture** (Bronze → Silver → Gold) separates raw ingestion from enrichment from business scoring
-- **Spatial operations** (zonal stats, KNN joins, distance calculations) run server-side on Apache Sedona
-- **Aurora PostgreSQL (PostGIS)** serves as the production data store — queryable, indexable, and connectable to Felt
-- The same data pipeline supports 4 different industry verticals with different scoring weights
+- **Spatial operations** (zonal stats, KNN joins) run server-side on Apache Sedona — even billions of rows
+- **JDBC export** moves Gold tables directly from Wherobots to Aurora in minutes
+- The same data pipeline supports **4 different industry verticals** with different scoring weights from identical source data
+- The risk story is **localized**: 140 buildings at the wildfire edge tell a different story than the 274K moderate-risk buildings downtown
 
 ---
 
-## Part 2: Map Builder AI Agent (45 min)
+## Part 2: Map Builder AI Agent (~40 min)
 
 ### Overview
 
-In this part, you'll build and run an AI agent that turns natural language prompts into interactive Felt maps. The agent:
+Now let's make the data visual. You'll run an AI agent that turns natural language prompts into interactive Felt maps. The agent:
 
 1. Reads **skill documents** (.md files) that teach it how to use PostGIS and the Felt API
 2. Uses **Amazon Bedrock (Claude)** to interpret prompts and generate Python code
@@ -276,7 +346,7 @@ This is NOT a traditional tool-calling agent with hardcoded functions — it rea
 ### Architecture
 
 ```
-User: "Show me buildings with high wildfire risk"
+User: "Show me buildings with high wildfire risk near Poway"
                     │
                     ▼
         ┌───────────────────────┐
@@ -301,53 +371,27 @@ User: "Show me buildings with high wildfire risk"
             Felt Map URL 🗺️
 ```
 
-### Step 1 — Understand the skills
+### Step 1 — Understand the skills (5 min)
 
 The agent has two skills in `part2_map_agent/skills/`:
 
 **`aurora-postgis/SKILL.md`** — Teaches the agent how to:
 - Connect to Aurora PostgreSQL via `psycopg2`
 - Discover spatial tables and columns
-- Sample values for styling decisions
 - Run PostGIS spatial queries (bounding box, distance, joins)
 
 **`felt-mapping/SKILL.md`** — Teaches the agent how to:
 - Create Felt maps with `felt_python.create_map()`
-- Add source layers from Aurora with SQL queries via `add_source_layer()`
+- Add source layers from Aurora with SQL queries
 - Apply FSL (Felt Style Language) for categorical and numeric styling
-- Use helper functions: `wait_for_layer()`, `categorical_style()`, `numeric_style()`, `rename_layer()`, `screenshot_map()`
+- Use helpers: `wait_for_layer()`, `categorical_style()`, `numeric_style()`
 
-The agent reads these skills at runtime, then generates and executes the appropriate Python code.
+The agent reads these skills at runtime, then generates and executes the appropriate Python code. No hardcoded tool wrappers.
 
-### Step 2 — Review the agent code
-
-Open `part2_map_agent/agent.py`. Key components:
-
-**Model** — Claude on Amazon Bedrock:
-```python
-BedrockModel(model_id="us.anthropic.claude-sonnet-4-20250514-v1:0", region_name="us-west-2")
-```
-
-**Tools** — `python_repl` (code execution) + `file_read` (read skill docs):
-```python
-agent = Agent(
-    model=get_model(),
-    system_prompt=SYSTEM_PROMPT,
-    tools=[python_repl, file_read],
-    plugins=[skills_plugin],
-)
-```
-
-**Pre-seeded environment** — the agent's Python environment is pre-loaded with:
-- `psycopg2`, `felt_python`, helper functions
-- `TOKEN`, `SOURCE_ID`, `AURORA_DSN` credentials
-- Ready to query and map immediately
-
-### Step 3 — Run the agent
+### Step 2 — Run the agent: your first map (10 min)
 
 ```bash
-# From the project root
-./run.sh "Show me buildings with high insurance risk in San Diego, colored by risk tier"
+./run.sh "Show me buildings with elevated and high insurance risk in San Diego, colored by risk tier"
 ```
 
 Or interactive mode:
@@ -356,53 +400,84 @@ Or interactive mode:
 ```
 
 **What happens behind the scenes:**
-1. The agent already knows the full schema (baked into its system prompt — no discovery needed)
+1. The agent knows the full schema (baked into its system prompt)
 2. It activates the `felt-mapping` skill for styling instructions
 3. Generates Python that:
    - Creates a new Felt map centered on San Diego
    - Adds a source layer with SQL: `SELECT * FROM workshop.insurance_exposure WHERE risk_tier IN ('elevated','high') LIMIT 5000`
    - Waits for the layer to process
-   - Applies categorical styling on `risk_tier`
-   - Renames the layer from "Workshop - CustomQuery" to something meaningful
-   - Takes a screenshot
+   - Applies categorical styling on `risk_tier` (red = high, orange = elevated)
+   - Renames the layer to something meaningful
 4. Returns the Felt map URL
+
+Open the URL — you should see ~141 building polygons clustered in the hills east of Poway and Ramona.
 
 > **Note:** Risk tiers in the data are: `low`, `moderate`, `elevated`, `high`. There is no "critical" tier.
 
-### Step 4 — Try more prompts
+### Step 3 — Try more prompts (15 min)
 
+Each prompt below shows what the agent does under the hood so you can follow along:
+
+**Different industry, same buildings:**
 ```bash
-# Compare risk across industry verticals
 ./run.sh "Create a map showing CRE risk scores as a gradient from green to red"
+```
+> *Queries `workshop.cre_risk`. Applies `numeric_style("risk_score")` to create a continuous color ramp. Compare this with the insurance map — the same buildings get different colors because CRE weights severe weather more heavily.*
 
-# Energy infrastructure analysis
+**Wildfire-specific view:**
+```bash
 ./run.sh "Map energy infrastructure with high outage probability, styled by vegetation encroachment risk"
+```
+> *Queries `workshop.energy_infra_risk WHERE outage_probability > 0.5`. Styles by `vegetation_encroachment_risk`. Shows buildings near dry brush zones in eastern San Diego where power lines meet wildfire fuel.*
 
-# Capital markets signals
-./run.sh "Show buildings with disruption probability above 0.5, colored by supply chain vulnerability"
-
-# Multi-layer map
-./run.sh "Create a map with two layers: high insurance exposure in red, and elevated flood risk in blue"
-
-# Spatial query
+**Spatial query (PostGIS in action):**
+```bash
 ./run.sh "Show me the 100 highest-risk buildings within 5km of downtown San Diego"
 ```
+> *Triggers a `ST_DWithin` spatial query on `workshop.insurance_exposure`, filtering to a 5km radius around downtown (approx. -117.16, 32.72). Expect ~100 markers in the urban core — mostly moderate risk from severe weather, not wildfire.*
 
-### Step 5 — Explore the Felt map
+**Multi-layer comparison:**
+```bash
+./run.sh "Create a map with two layers: high insurance risk buildings in red, and the same buildings showing their CRE risk tier"
+```
+> *Creates one map, adds two source layers from different Gold tables. Uses `wait_for_layer(map_id, expect_count=N)` to sync each layer. Shows how the same physical buildings are scored differently by different industries.*
+
+**The wildfire story:**
+```bash
+./run.sh "Map all buildings near Poway with wildfire_factor above 0.3, styled by wildfire_factor as a heat gradient"
+```
+> *Queries `workshop.insurance_exposure WHERE wildfire_factor > 0.3`. These are the 159 buildings at the wildland-urban interface. The gradient shows which specific buildings face the highest burn probability — and you can overlay this with the burn probability raster to see why.*
+
+### Step 4 — Explore the Felt map (5 min)
 
 Each map URL opens an interactive Felt map where you can:
-- **Hover** over buildings to see risk scores and explanations
-- **Filter** layers by attributes
+- **Hover** over buildings to see risk scores and factor breakdowns
+- **Filter** layers by attributes (e.g., show only `risk_tier = 'high'`)
+- **Toggle** the burn probability raster layer to see raw wildfire data beneath
 - **Share** the map URL with anyone — no login required to view
-- **Add annotations** — draw, add text, upload more data
-- **Embed** the map in dashboards or reports
+- **Add annotations** — draw, add text, mark up areas of interest
+
+### Step 5 — Bonus: Felt MCP for conversational map exploration (5 min)
+
+The Strands agent builds maps programmatically. But you can also explore data conversationally through the **Felt MCP** (`https://felt.com/mcp`).
+
+If you have Felt MCP configured (from Setup Step 3), try asking in your MCP chat:
+
+> *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the Workshop Aurora data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
+
+Or query existing map data:
+
+> *"What's the average risk score by building_class for buildings in the elevated tier?"*
+
+This is the **business user** path — no Python, no agent code. Just natural language to maps.
 
 ### Key Takeaways — Part 2
 
 - The agent model is **skills + code execution** — not hardcoded tool wrappers
 - **AgentSkills** (.md files) teach the agent domain knowledge at runtime
-- The agent can handle complex multi-step workflows: discover → query → create map → style → screenshot
+- The agent handles complex multi-step workflows: query → create map → style → screenshot
 - **Felt source layers** connect directly to Aurora — maps stay live as data updates
+- **Felt MCP** provides a conversational interface for business users without code
 - Natural language makes spatial analysis accessible to non-technical users
 
 ---
@@ -417,13 +492,26 @@ Part 1 and Part 2 form a complete geospatial AI stack:
 | **Spatial Processing** | Wherobots Cloud (Apache Sedona) | Spatial joins, zonal stats, risk scoring |
 | **Data Store** | Amazon Aurora PostgreSQL (PostGIS) | Production database with spatial indexing |
 | **AI Orchestration** | AWS Strands Agents SDK + Amazon Bedrock | Natural language → code generation → execution |
-| **Visualization** | Felt | Interactive maps, styling, sharing |
+| **Visualization** | Felt + Felt MCP | Interactive maps, styling, sharing, conversational exploration |
 
-The difference between the two parts:
+**Two modes of interaction:**
+- **Developer** — Strands agent with skills + code execution (Part 2, Steps 2-4)
+- **Business user** — Felt MCP or Felt's in-product AI agent (Part 2, Step 5)
+
+**Two phases of the pipeline:**
 - **Part 1** is the **data pipeline** — reproducible, automated, runs on a schedule
 - **Part 2** is the **AI agent** — flexible, conversational, good for exploration and ad-hoc analysis
 
 In production, you'd use both: pipelines to keep data fresh, agents to let anyone explore it.
+
+---
+
+## Next Steps
+
+- **Productionize** — Amazon Bedrock AgentCore provides runtime, identity, memory, and monitoring for deploying agents
+- **More hazards** — Add earthquake, drought, or climate projection data to the scoring model
+- **Custom weights** — Modify `risk_weights.yaml` to tune scoring for your specific use case
+- **AWS Marketplace** — Felt and Wherobots are available on AWS Marketplace for enterprise deployment
 
 ---
 
@@ -432,17 +520,19 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 | Problem | Solution |
 |---|---|
 | `psycopg2.OperationalError: connection refused` | Check Aurora host/port/credentials in `.env` |
-| `FELT_API_TOKEN not set` | Add token to `.env` — get one at felt.com/maps/latest/integrations |
-| `AccessDeniedException` from Bedrock | Check IAM permissions + enable Claude model access in Bedrock console |
+| `FELT_API_TOKEN not set` | Add token to `.env` |
+| `AccessDeniedException` from Bedrock | Check IAM permissions + Claude model access in Bedrock console |
 | Wherobots MCP not connecting | Verify API key and `https://api.cloud.wherobots.com/mcp/` URL |
-| Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this, wait a few seconds |
-| Agent generates wrong SQL | Schema is baked into the system prompt — check `agent.py` for the table definitions |
+| Felt MCP not connecting | Verify API token and `https://felt.com/mcp` URL |
+| Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this |
+| Agent generates wrong SQL | Schema is in the system prompt — check `agent.py` for table definitions |
 | `ModuleNotFoundError` | Activate virtualenv: `source .venv/bin/activate` |
-| Agent uses wrong source ID | Check `FELT_SOURCE_ID` in `.env` — should point to the Workshop source |
+| Agent uses wrong source ID | Check `FELT_SOURCE_ID` in `.env` |
 
 ## Useful Links
 
 - [Felt API Reference](https://developers.felt.com/rest-api/api-reference)
+- [Felt MCP Server](https://felt.com/mcp) — connect via Claude Desktop, Kiro, or VS Code
 - [felt-python SDK](https://github.com/felt/felt-python)
 - [Strands Agents SDK](https://github.com/strands-agents/sdk-python)
 - [Amazon Bedrock Docs](https://docs.aws.amazon.com/bedrock/)

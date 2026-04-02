@@ -18,7 +18,7 @@
 - Set up Felt MCP tools for map creation & styling
 - Connect Aurora as a spatial data source
 - Build a Strands agent that turns prompts into Felt maps
-- "Show wildfire risk for Austin buildings" → map URL
+- "Show wildfire risk for San Diego buildings" → map URL
 
 ## Architecture
 
