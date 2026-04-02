@@ -1,22 +1,22 @@
 # Architecture — Geospatial Agentic AI Stack
 
-> **Two agentic layers, one pipeline:**
+> **An end-to-end workflow that takes raw satellite imagery and weather data through agentic data engineering, risk scoring, and into interactive map dashboards — all driven by natural language.**
 >
-> **Layer 1 — Data Engineering:** Developer + [Wherobots MCP](https://api.cloud.wherobots.com/mcp/) → Medallion pipeline (Bronze → Silver → Gold) → Aurora PostgreSQL
+> **Part 1 — Data Engineering:** Developer + [Wherobots MCP](https://api.cloud.wherobots.com/mcp/) → Medallion pipeline (Bronze → Silver → Gold) → Aurora PostgreSQL
 >
-> **Layer 2 — Map Agent:** [Strands Agent](https://github.com/strands-agents/sdk-python) (Bedrock Claude) + [Felt MCP](https://felt.com/mcp) → Interactive maps from natural language
+> **Part 2 — Map Agent:** [Strands Agent](https://github.com/strands-agents/sdk-python) (Bedrock Claude) + [Felt MCP](https://felt.com/mcp) → Interactive maps from natural language
 >
 > **Target Industries**: Insurance, Commercial Real Estate, Capital Markets, Energy & Utilities
 
 ---
 
-## Two-Layer Agentic Architecture
+## Architecture Overview
 
-The system has two distinct orchestration layers — one for data engineering, one for end-user exploration:
+The system has two parts — one for data engineering, one for end-user exploration:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  LAYER 1 — DATA ENGINEERING AGENT                                       ║
+║  PART 1 — DATA ENGINEERING AGENT                                        ║
 ║  Persona: Data engineer / analyst in Claude Code or Kiro                ║
 ║                                                                         ║
 ║  ┌─────────────────┐     ┌──────────────────────────────────────┐      ║
@@ -39,10 +39,10 @@ The system has two distinct orchestration layers — one for data engineering, o
 ╚══════════════════════════════════════════════════════════════╪═════════╝
                                                                │
                            Aurora is the handoff point         │
-                           between the two layers              │
+                           between the two parts               │
                                                                │
 ╔══════════════════════════════════════════════════════════════╪═════════╗
-║  LAYER 2 — END-USER MAP AGENT                               │         ║
+║  PART 2 — END-USER MAP AGENT                                │         ║
 ║  Persona: Analyst / business user asking questions           │         ║
 ║                                                              │         ║
 ║  ┌─────────────────┐     ┌──────────────────────────────┐   │         ║
@@ -74,9 +74,9 @@ The system has two distinct orchestration layers — one for data engineering, o
 ╚═════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Why two layers?
+### Why two parts?
 
-| | Layer 1: Data Engineering | Layer 2: Map Agent |
+| | Part 1: Data Engineering | Part 2: Map Agent |
 |---|---|---|
 | **Persona** | Data engineer in an IDE | Analyst asking questions |
 | **Interface** | Claude Code / Kiro + Wherobots MCP | Strands Agent CLI or Felt MCP chat |
@@ -159,7 +159,7 @@ Gold tables are exported to Aurora PostgreSQL via JDBC:
 
 ---
 
-## How the End-User Agent Works (Layer 2)
+## How the End-User Agent Works (Part 2)
 
 The Strands MapBuilder agent combines **skills + code execution + Felt MCP**:
 
@@ -183,7 +183,7 @@ Both produce **live source layers** — the map stays connected to Aurora, so da
 | Two-layer architecture | Wherobots MCP (data eng) + Strands/Felt MCP (maps) | Clean separation: data engineer builds pipeline, analyst explores maps |
 | Geographic scope | San Diego, CA | Wildfire + flood + severe weather overlap; compact for workshop |
 | Asset type | Buildings (Overture) | Available via Wherobots Open Data; 358K in San Diego |
-| Aurora as handoff | `workshop` schema | Aurora bridges the two layers — pipeline writes, agent reads |
+| Aurora as handoff | `workshop` schema | Aurora bridges the two parts — pipeline writes, agent reads |
 | No Aurora MCP | Agent uses psycopg2 + Felt source layers | Felt MCP already queries Aurora; adding a third MCP is redundant |
 | Gold persistence | Iceberg + Aurora | Iceberg for reprocessing, Aurora for serving and Felt connectivity |
 | Normalization | Min-max (0–1 range) | Intuitive for workshop; AOI-relative (not comparable across regions) |
