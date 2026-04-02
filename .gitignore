@@ -6,3 +6,5 @@ data/*.geojson
 data/*.parquet
 .DS_Store
 .mcp.json
+CLAUDE.md
+transcripts/
