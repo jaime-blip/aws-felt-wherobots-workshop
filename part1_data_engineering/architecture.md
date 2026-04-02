@@ -1,6 +1,6 @@
 # Architecture — Geospatial Risk Intelligence Pipeline
 
-> **Pipeline**: Raw (S3) → Bronze (Iceberg) → Silver (Iceberg) → Gold (Iceberg + GeoParquet → Aurora PostgreSQL) → Felt Maps
+> **Pipeline**: Raw (S3) → Bronze (Iceberg) → Silver (Iceberg) → Gold (Iceberg → Aurora PostgreSQL) → Felt Maps
 >
 > **Runtime**: [Wherobots Cloud](https://wherobots.com/) with Apache Sedona
 >
@@ -13,56 +13,51 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                       ORCHESTRATION LAYER                                │
-│           Amazon Strands Agent + MCP Servers                             │
-│  (Wherobots MCP)          (Aurora MCP)          (Felt MCP)               │
-└───────┬────────────────────────┬──────────────────────┬──────────────────┘
-        │                        │                      │
-        ▼                        │                      │
-┌──────────────────┐             │                      │
-│  RAW DATA (S3)   │             │                      │
-│  - NOAA SWDI     │             │                      │
-│  - MODIS Flood   │             │                      │
-│  - USFS Wildfire │             │                      │
-│  - Overture Bld  │             │                      │
-└───────┬──────────┘             │                      │
-        │ raw-to-bronze.ipynb    │                      │
-        ▼                        │                      │
-┌──────────────────┐             │                      │
-│  BRONZE (Iceberg)│             │                      │
-│  Schema + Dedup  │             │                      │
-│  Time Travel     │             │                      │
-└───────┬──────────┘             │                      │
-        │ bronze-to-silver.ipynb │                      │
-        │ Zonal Stats, KNN      │                      │
-        │ Spatial Joins          │                      │
-        ▼                        │                      │
-┌──────────────────┐             │                      │
-│  SILVER (Iceberg)│             │                      │
-│  - Wildfire Exp  │             │                      │
-│  - Flood Exp     │             │                      │
-│  - Weather Dens  │             │                      │
-│  - Asset Enrich  │             │                      │
-└───────┬──────────┘             │                      │
-        │ silver-to-gold.ipynb   │                      │
-        │ Normalization          │                      │
-        │ Industry Weighting     │                      │
-        ▼                        │                      │
-┌──────────────────┐             │                      │
-│  GOLD (Iceberg   │   JDBC     │                      │
-│  + GeoParquet)   ├────────────▶                      │
-│  - Insurance     │             │                      │
-│  - CRE           │   ┌────────▼──────────┐           │
-│  - CapMarkets    │   │ AURORA POSTGRESQL  │  Publish  │
-│  - Energy        │   │ (Serving Layer)    ├───────────▶
-│  - Scoring Cfg   │   │ PostGIS + Indexes  │           │
-└──────────────────┘   └───────────────────┘  ┌────────▼────────┐
-                                              │  FELT MAPS       │
-                                              │  - Insurance CAT  │
-                                              │  - CRE Screening  │
-                                              │  - CapMkt Signals  │
-                                              │  - Energy Grid     │
-                                              └──────────────────┘
+│  Wherobots MCP (data eng)    Strands Agent (maps)    Felt MCP (viz)     │
+│  api.cloud.wherobots.com     Bedrock Claude           felt.com/mcp      │
+└───────┬────────────────────────────┬──────────────────────┬─────────────┘
+        │                            │                      │
+        ▼                            │                      │
+┌──────────────────┐                 │                      │
+│  RAW DATA (S3)   │                 │                      │
+│  - NOAA SWDI     │                 │                      │
+│  - MODIS Flood   │                 │                      │
+│  - USFS Wildfire │                 │                      │
+│  - Overture Bld  │                 │                      │
+└───────┬──────────┘                 │                      │
+        │ bronze-to-silver.ipynb     │                      │
+        │ Zonal Stats, KNN          │                      │
+        │ Spatial Joins              │                      │
+        ▼                            │                      │
+┌──────────────────┐                 │                      │
+│  SILVER (Iceberg)│                 │                      │
+│  - Wildfire Exp  │                 │                      │
+│  - Flood Exp     │                 │                      │
+│  - Weather Dens  │                 │                      │
+│  - Asset Enrich  │                 │                      │
+└───────┬──────────┘                 │                      │
+        │ silver-to-gold.ipynb       │                      │
+        │ Normalization              │                      │
+        │ Industry Weighting         │                      │
+        ▼                            │                      │
+┌──────────────────┐                 │                      │
+│  GOLD (Iceberg)  │   JDBC          │                      │
+│  358K buildings  ├────────────────▶│                      │
+│  x 4 verticals  │                 │                      │
+└──────────────────┘   ┌─────────────▼────────────┐        │
+                       │ AURORA POSTGRESQL         │        │
+                       │ workshop schema           │ Source │
+                       │ PostGIS + Indexes         ├────────▶
+                       │                           │        │
+                       │ Agent queries via         │  ┌─────▼───────────┐
+                       │ psycopg2 (python_repl)    │  │  FELT MAPS       │
+                       └───────────────────────────┘  │  - Risk by tier   │
+                                                      │  - Industry views  │
+                                                      │  - Spatial queries │
+                                                      └──────────────────┘
 ```
+
+**Note:** There is no Aurora MCP server. The Strands agent connects to Aurora directly via `psycopg2` through the `python_repl` tool, guided by the `aurora-postgis` skill. Felt connects to Aurora as a registered data source for live source layers.
 
 ---
 
@@ -70,9 +65,10 @@
 
 | Step | Notebook | What it does |
 |------|----------|--------------|
-| 1 | `raw-to-bronze.ipynb` | Ingest raw CSV / GeoTIFF / raster from S3 and Wherobots Open Data into Bronze Iceberg tables |
-| 2 | `bronze-to-silver.ipynb` | Spatial joins, zonal statistics (raster → vector), KNN event proximity → Silver Iceberg |
-| 3 | `silver-to-gold.ipynb` | Industry-specific normalization, weighted scoring, risk tiers → Gold Iceberg + GeoParquet |
+| 1 | `bronze-to-silver.ipynb` | Spatial joins, zonal statistics (raster → vector), KNN event proximity → Silver Iceberg |
+| 2 | `silver-to-gold.ipynb` | Industry-specific normalization, weighted scoring, risk tiers → Gold Iceberg + JDBC to Aurora |
+
+> The raw-to-bronze step is handled by Wherobots' catalog — Bronze data lives in `org_catalog` and `wherobots_open_data` as pre-registered Iceberg tables.
 
 ---
 
@@ -80,10 +76,9 @@
 
 | Dataset | Source | Type | Catalog Table |
 |---------|--------|------|---------------|
-| NOAA SWDI — Hail | [AWS Open Data](https://registry.opendata.aws/noaa-swdi/) | Vector (CSV) | `org_catalog.noaa_swdi.hail` |
-| NOAA SWDI — Mesocyclone Structures | AWS Open Data | Vector (CSV) | `org_catalog.noaa_swdi.structure` |
-| NOAA SWDI — TVS | AWS Open Data | Vector (CSV) | `org_catalog.noaa_swdi.tvs` |
-| NOAA SWDI — Warnings | AWS Open Data | Vector (CSV) | `org_catalog.noaa_swdi.warn` |
+| NOAA SWDI — Hail | [AWS Open Data](https://registry.opendata.aws/noaa-swdi/) | Vector | `org_catalog.noaa_swdi.hail` |
+| NOAA SWDI — Mesocyclone | AWS Open Data | Vector | `org_catalog.noaa_swdi.structure` |
+| NOAA SWDI — TVS | AWS Open Data | Vector | `org_catalog.noaa_swdi.tvs` |
 | MODIS MCDWD Flood NRT | [NASA LANCE](https://nrt3.modaps.eosdis.nasa.gov/) | Raster (GeoTIFF) | `org_catalog.modis.MCDWD_L3_F3_NRT` |
 | USFS Burn Probability | [wildfirerisk.org](https://wildfirerisk.org/) | Raster (COG) | `org_catalog.wildfire_risk.burn_probability_conus` |
 | USFS Conditional Flame Length | wildfirerisk.org | Raster (COG) | `org_catalog.wildfire_risk.conditional_flame_length_conus` |
@@ -93,15 +88,6 @@
 
 ## Layer Details
 
-### Bronze — Cataloged Raw
-
-Raw source data converted to **Apache Iceberg tables** with schema enforcement. Still close-to-raw, but queryable via SQL and supporting time travel for before/after analysis.
-
-- Schema enforcement (cast types, validate geometries)
-- Deduplication on natural keys
-- Append-only ingestion — no updates to historical records
-- Iceberg snapshots enable time travel for baseline vs. event window queries
-
 ### Silver — Spatial Analytics
 
 The heavy compute layer where Wherobots/Sedona performs spatial joins, zonal statistics, KNN, and buffered aggregations to conflate hazard signals onto building footprints.
@@ -110,68 +96,66 @@ The heavy compute layer where Wherobots/Sedona performs spatial joins, zonal sta
 |---|---|---|
 | `asset_wildfire_exposure` | Zonal statistics (raster → vector) | USFS burn probability + flame length |
 | `asset_flood_exposure` | Zonal statistics + temporal aggregation | MODIS flood NRT |
-| `asset_weather_density` | KNN spatial join (vector → vector) | NOAA SWDI hail / structure / TVS |
+| `asset_weather_density` | KNN spatial join (k=10, 25km radius) | NOAA SWDI hail / structure / TVS |
 | `asset_enriched` | LEFT JOIN of all above onto buildings | All hazards unified |
 
 Each table is an independently materialized Iceberg table — reprocessing one hazard does not require recomputing others.
 
 ### Gold — Industry-Specific Scoring
 
-All Gold tables start from `silver.asset_enriched` and apply the same framework:
+All Gold tables start from `asset_enriched` and apply the same framework:
 
 1. **Normalize** raw hazard metrics to [0, 1] via min-max scaling
 2. **Weight** the three factors per industry
-3. **Classify** into risk tiers (Critical / High / Elevated / Moderate / Low)
-4. **Add** industry-specific derived metrics
+3. **Classify** into risk tiers (High ≥ 0.60, Elevated ≥ 0.40, Moderate ≥ 0.20, Low < 0.20)
+4. **Derive** industry-specific metrics
 
-| Gold Table | Industry | Weights (wf / fl / sw) | Key Derived Metrics |
-|---|---|---|---|
-| `insurance_exposure` | Insurance | 0.40 / 0.40 / 0.20 | exposure_delta, triage_priority, relative_risk_band |
-| `cre_risk` | Commercial Real Estate | 0.30 / 0.35 / 0.35 | acquisition_screen_flag, exposure_magnitude_index |
-| `capital_markets_signals` | Capital Markets | 0.20 / 0.30 / 0.50 | disruption_signal, supply_chain_vulnerability |
-| `energy_asset_risk` | Energy & Utilities | 0.40 / 0.20 / 0.40 | outage_probability, wildfire_ignition_risk |
+| Gold Table | Aurora Table | Industry | Weights (wf / fl / sw) | Key Derived Metrics |
+|---|---|---|---|---|
+| `insurance_exposure` | `workshop.insurance_exposure` | Insurance | 0.40 / 0.40 / 0.20 | exposure_delta, triage_priority, estimated_loss_band |
+| `cre_risk` | `workshop.cre_risk` | Commercial Real Estate | 0.30 / 0.35 / 0.35 | acquisition_screen_flag, environmental_risk_index, hazard_proximity_m |
+| `capmarkets_signals` | `workshop.capmarkets_signals` | Capital Markets | 0.20 / 0.30 / 0.50 | disruption_probability, supply_chain_vulnerability, event_signal_strength |
+| `energy_infra_risk` | `workshop.energy_infra_risk` | Energy & Utilities | 0.40 / 0.20 / 0.40 | outage_probability, vegetation_encroachment_risk, weather_impact_frequency |
 
 > For full column-level detail and business logic, see [data_dictionary.md](data_dictionary.md).
 
 ---
 
-## Output Destinations
+## Output Destination
 
-Each Gold table is written to three destinations:
+Gold tables are exported to Aurora PostgreSQL via JDBC:
 
-| Destination | Format | Location |
+| Destination | Schema | Format |
 |---|---|---|
-| Wherobots Iceberg | Apache Iceberg | `org_catalog.gold.<table_name>` |
-| S3 GeoParquet | GeoParquet | `s3://.../data/shared/gold/<table_name>` |
-| Aurora PostgreSQL | PostGIS (via JDBC) | `gold.<table_name>` |
+| Aurora PostgreSQL | `workshop.*` | PostGIS (GEOMETRY + indexes) via JDBC |
 
-> Aurora DDL is in [aurora_schema.sql](aurora_schema.sql).
+> DDL reference: [aurora_schema.sql](aurora_schema.sql) (note: uses `gold` schema and older column names — Aurora actual schema is `workshop` with names as listed in the Gold table above)
 
 ---
 
-## Felt Map Configurations
+## How the Agent Queries Aurora
 
-| Felt Map | Gold Source | Layer Style | Popup Fields |
-|---|---|---|---|
-| Insurance CAT Triage | `insurance_exposure` | Color ramp by `risk_tier` (green → red) | risk_score, exposure_delta, triage_priority, estimated_loss_band |
-| CRE Acquisition Screening | `cre_risk` | Bivariate: risk_score × assessed_value | risk_score, acquisition_screen_flag, environmental_risk_index |
-| CapMarkets Disruption Monitor | `capmarkets_signals` | Size by disruption_probability, color by signal_strength | disruption_probability, supply_chain_vulnerability |
-| Energy Grid Vulnerability | `energy_infra_risk` | Color ramp by `risk_tier`, outline by outage_probability | outage_probability, vegetation_encroachment_risk |
+The Part 2 MapBuilder agent does **not** use an Aurora MCP server. Instead:
+
+1. The `aurora-postgis` **skill** (.md file) teaches the agent PostGIS query patterns
+2. The agent generates Python code using `psycopg2` to query Aurora
+3. The code runs in `python_repl` (Strands tool)
+4. Results flow to `felt_python` for map creation
+
+This "skills + code execution" approach is more flexible than an MCP — the agent can compose arbitrary SQL, spatial joins, and multi-step workflows in a single Python script.
 
 ---
 
-## Aurora → Felt Publishing Flow
+## Felt Integration
 
-```
-Aurora PostgreSQL (Gold tables)
-    │
-    ▼
-[Felt MCP Server / Felt API]
-    ├── Create/update layer per Gold table
-    ├── Apply industry-specific map style
-    ├── Configure popups with score breakdown
-    └── Publish shareable map link
-```
+Maps are created two ways:
+
+| Method | Used by | How it connects to Aurora |
+|---|---|---|
+| **felt-python SDK** (via Strands agent) | Developer workflow | `add_source_layer()` with SQL query against Aurora data source |
+| **Felt MCP** (`https://felt.com/mcp`) | Business user / conversational | `create_layer_from_data_source` tool queries Aurora directly |
+
+Both use Felt's **source layer** feature — the map connects live to Aurora, so data updates flow through automatically.
 
 ---
 
@@ -179,10 +163,11 @@ Aurora PostgreSQL (Gold tables)
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Geographic scope | San Diego, CA (AOI) | Wildfire + flood + severe weather overlap; compact enough for workshop |
-| Asset type | Buildings (Overture) | Available via Wherobots Open Data; parcels as future extension |
-| Temporal windows | Configurable via notebook params | Default: baseline = 1 yr prior, event = 30-day window |
-| Gold persistence | Iceberg + GeoParquet + Aurora | Iceberg for reprocessing, GeoParquet for portability, Aurora for serving |
-| Normalization | Min-max (0–1 range) | Intuitive for workshop; AOI-relative (not comparable across regions); percentile rank for production |
+| Geographic scope | San Diego, CA | Wildfire + flood + severe weather overlap; compact for workshop |
+| Asset type | Buildings (Overture) | Available via Wherobots Open Data; 358K in San Diego |
+| Aurora schema | `workshop` | Isolated from other data; clean for CloudFormation seeding |
+| No Aurora MCP | Agent uses psycopg2 via skills | Simpler setup; skills + code execution is more flexible |
+| Gold persistence | Iceberg + Aurora | Iceberg for reprocessing, Aurora for serving and Felt connectivity |
+| Normalization | Min-max (0–1 range) | Intuitive for workshop; AOI-relative (not comparable across regions) |
+| Risk tiers | High / Elevated / Moderate / Low | 4 tiers, no "Critical" — matches actual data distribution |
 | Refresh cadence | Full refresh (truncate-and-load) | Suitable for workshop; upsert pattern for production |
-| Scoring config | Iceberg table + replicated to Aurora | Parameterizable weights; auditable via version column |
