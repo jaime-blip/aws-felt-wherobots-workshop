@@ -86,7 +86,7 @@ Configure MCP servers (Kiro, VS Code, or Claude Desktop):
 Run the Map Builder Agent:
 
 ```bash
-./part2_map_agent/run.sh "Show me buildings with high insurance risk in San Diego, colored by risk tier"
+./run.sh "Show me buildings with high insurance risk in San Diego, colored by risk tier"
 ```
 
 > See [workshop-step-by-step.md](workshop-step-by-step.md) for the full 90-minute guided workshop.

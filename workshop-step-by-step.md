@@ -371,9 +371,13 @@ User: "Show me buildings with high wildfire risk near Poway"
             Felt Map URL 🗺️
 ```
 
-### Step 1 — Understand the skills (5 min)
+### Step 1 — Navigate to the agent and understand the skills (5 min)
 
-The agent has two skills in `part2_map_agent/skills/`:
+```bash
+cd part2_map_agent
+```
+
+The agent has two skills in `skills/`:
 
 **`aurora-postgis/SKILL.md`** — Teaches the agent how to:
 - Connect to Aurora PostgreSQL via `psycopg2`
