@@ -1,8 +1,10 @@
-# Architecture — Geospatial Risk Intelligence Pipeline
+# Architecture — Geospatial Agentic AI Stack
 
-> **Pipeline**: Raw (S3) → Bronze (Iceberg) → Silver (Iceberg) → Gold (Iceberg → Aurora PostgreSQL) → Felt Maps
+> **Two agentic layers, one pipeline:**
 >
-> **Runtime**: [Wherobots Cloud](https://wherobots.com/) with Apache Sedona
+> **Layer 1 — Data Engineering:** Developer + [Wherobots MCP](https://api.cloud.wherobots.com/mcp/) → Medallion pipeline (Bronze → Silver → Gold) → Aurora PostgreSQL
+>
+> **Layer 2 — Map Agent:** [Strands Agent](https://github.com/strands-agents/sdk-python) (Bedrock Claude) + [Felt MCP](https://felt.com/mcp) → Interactive maps from natural language
 >
 > **Target Industries**: Insurance, Commercial Real Estate, Capital Markets, Energy & Utilities
 
