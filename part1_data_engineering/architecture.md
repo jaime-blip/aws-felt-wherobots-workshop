@@ -8,56 +8,80 @@
 
 ---
 
-## Pipeline Overview
+## Two-Layer Agentic Architecture
+
+The system has two distinct orchestration layers — one for data engineering, one for end-user exploration:
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                       ORCHESTRATION LAYER                                │
-│  Wherobots MCP (data eng)    Strands Agent (maps)    Felt MCP (viz)     │
-│  api.cloud.wherobots.com     Bedrock Claude           felt.com/mcp      │
-└───────┬────────────────────────────┬──────────────────────┬─────────────┘
-        │                            │                      │
-        ▼                            │                      │
-┌──────────────────┐                 │                      │
-│  RAW DATA (S3)   │                 │                      │
-│  - NOAA SWDI     │                 │                      │
-│  - MODIS Flood   │                 │                      │
-│  - USFS Wildfire │                 │                      │
-│  - Overture Bld  │                 │                      │
-└───────┬──────────┘                 │                      │
-        │ bronze-to-silver.ipynb     │                      │
-        │ Zonal Stats, KNN          │                      │
-        │ Spatial Joins              │                      │
-        ▼                            │                      │
-┌──────────────────┐                 │                      │
-│  SILVER (Iceberg)│                 │                      │
-│  - Wildfire Exp  │                 │                      │
-│  - Flood Exp     │                 │                      │
-│  - Weather Dens  │                 │                      │
-│  - Asset Enrich  │                 │                      │
-└───────┬──────────┘                 │                      │
-        │ silver-to-gold.ipynb       │                      │
-        │ Normalization              │                      │
-        │ Industry Weighting         │                      │
-        ▼                            │                      │
-┌──────────────────┐                 │                      │
-│  GOLD (Iceberg)  │   JDBC          │                      │
-│  358K buildings  ├────────────────▶│                      │
-│  x 4 verticals  │                 │                      │
-└──────────────────┘   ┌─────────────▼────────────┐        │
-                       │ AURORA POSTGRESQL         │        │
-                       │ workshop schema           │ Source │
-                       │ PostGIS + Indexes         ├────────▶
-                       │                           │        │
-                       │ Agent queries via         │  ┌─────▼───────────┐
-                       │ psycopg2 (python_repl)    │  │  FELT MAPS       │
-                       └───────────────────────────┘  │  - Risk by tier   │
-                                                      │  - Industry views  │
-                                                      │  - Spatial queries │
-                                                      └──────────────────┘
+╔══════════════════════════════════════════════════════════════════════════╗
+║  LAYER 1 — DATA ENGINEERING AGENT                                       ║
+║  Persona: Data engineer / analyst in Claude Code or Kiro                ║
+║                                                                         ║
+║  ┌─────────────────┐     ┌──────────────────────────────────────┐      ║
+║  │ Developer        │     │ Wherobots MCP                        │      ║
+║  │ (Claude Code /   │────▶│ https://api.cloud.wherobots.com/mcp/ │      ║
+║  │  Kiro / VS Code) │     │ + wherobots-pipeline skill           │      ║
+║  └─────────────────┘     └───────────────┬──────────────────────┘      ║
+║                                          │                              ║
+║    "Generate a notebook that scores      │  Discovers catalogs,         ║
+║     San Diego buildings for wildfire,    │  generates Sedona SQL,       ║
+║     flood, and weather risk"             │  executes on Spark           ║
+║                                          ▼                              ║
+║  ┌──────────┐   ┌──────────┐   ┌──────────┐   JDBC   ┌──────────────┐ ║
+║  │ RAW (S3) │──▶│ SILVER   │──▶│ GOLD     │─────────▶│ AURORA       │ ║
+║  │ NOAA     │   │ Zonal    │   │ Scoring  │          │ PostgreSQL   │ ║
+║  │ MODIS    │   │ Stats    │   │ Weighting│          │ workshop.*   │ ║
+║  │ USFS     │   │ KNN Join │   │ Tiers    │          │ 358K x 4    │ ║
+║  │ Overture │   │          │   │          │          │              │ ║
+║  └──────────┘   └──────────┘   └──────────┘          └──────┬───────┘ ║
+╚══════════════════════════════════════════════════════════════╪═════════╝
+                                                               │
+                           Aurora is the handoff point         │
+                           between the two layers              │
+                                                               │
+╔══════════════════════════════════════════════════════════════╪═════════╗
+║  LAYER 2 — END-USER MAP AGENT                               │         ║
+║  Persona: Analyst / business user asking questions           │         ║
+║                                                              │         ║
+║  ┌─────────────────┐     ┌──────────────────────────────┐   │         ║
+║  │ User prompt:     │     │ Strands Agent                │   │         ║
+║  │ "Show buildings  │────▶│ (Amazon Bedrock Claude)      │   │         ║
+║  │  with high       │     │                              │   │         ║
+║  │  wildfire risk    │     │ Skills:                      │   │         ║
+║  │  near Poway"     │     │  - aurora-postgis            │   │         ║
+║  └─────────────────┘     │  - felt-mapping              │   │         ║
+║                           └──────────┬───────────────────┘   │         ║
+║                                      │ generates Python      │         ║
+║                                      ▼                       │         ║
+║                           ┌──────────────────────┐           │         ║
+║                           │ python_repl           │           │         ║
+║                           │                       │           │         ║
+║                           │ psycopg2 → Aurora ◀───────────────┘         ║
+║                           │ felt_python → Felt MCP                      ║
+║                           │ FSL → Styling                               ║
+║                           └──────────┬───────────┘                      ║
+║                                      │                                  ║
+║                                      ▼                                  ║
+║                           ┌──────────────────────┐                      ║
+║                           │ Felt Map              │                      ║
+║                           │ https://felt.com/mcp  │                      ║
+║                           │ - Interactive layers   │                      ║
+║                           │ - Live Aurora source   │                      ║
+║                           │ - Shareable URL        │                      ║
+║                           └──────────────────────┘                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
 ```
 
-**Note:** There is no Aurora MCP server. The Strands agent connects to Aurora directly via `psycopg2` through the `python_repl` tool, guided by the `aurora-postgis` skill. Felt connects to Aurora as a registered data source for live source layers.
+### Why two layers?
+
+| | Layer 1: Data Engineering | Layer 2: Map Agent |
+|---|---|---|
+| **Persona** | Data engineer in an IDE | Analyst asking questions |
+| **Interface** | Claude Code / Kiro + Wherobots MCP | Strands Agent CLI or Felt MCP chat |
+| **Intelligence** | MCP-guided notebook generation | Skills + code execution |
+| **Runs when** | Pipeline build time (once or on schedule) | Ad-hoc, interactive, on demand |
+| **Output** | Scored tables in Aurora | Interactive Felt maps |
+| **MCP servers** | Wherobots | Felt |
 
 ---
 
@@ -133,29 +157,20 @@ Gold tables are exported to Aurora PostgreSQL via JDBC:
 
 ---
 
-## How the Agent Queries Aurora
+## How the End-User Agent Works (Layer 2)
 
-The Part 2 MapBuilder agent does **not** use an Aurora MCP server. Instead:
+The Strands MapBuilder agent combines **skills + code execution + Felt MCP**:
 
-1. The `aurora-postgis` **skill** (.md file) teaches the agent PostGIS query patterns
-2. The agent generates Python code using `psycopg2` to query Aurora
-3. The code runs in `python_repl` (Strands tool)
-4. Results flow to `felt_python` for map creation
+1. **Skills** (`.md` files) teach the agent PostGIS patterns and Felt styling
+2. The agent generates Python using `psycopg2` to query Aurora and `felt_python` to create maps
+3. Code runs in `python_repl` (Strands tool)
+4. **Felt MCP** (`https://felt.com/mcp`) provides additional tools: `create_layer_from_data_source`, `update_layer_style`, `get_tabular_data_from_data_source`
 
-This "skills + code execution" approach is more flexible than an MCP — the agent can compose arbitrary SQL, spatial joins, and multi-step workflows in a single Python script.
+There is no Aurora MCP — the agent reaches Aurora two ways:
+- **Direct SQL** via `psycopg2` (for complex PostGIS queries like `ST_DWithin`, spatial joins)
+- **Felt source layers** via Felt MCP or `felt_python` SDK (Aurora is a registered data source in Felt — SQL queries run server-side)
 
----
-
-## Felt Integration
-
-Maps are created two ways:
-
-| Method | Used by | How it connects to Aurora |
-|---|---|---|
-| **felt-python SDK** (via Strands agent) | Developer workflow | `add_source_layer()` with SQL query against Aurora data source |
-| **Felt MCP** (`https://felt.com/mcp`) | Business user / conversational | `create_layer_from_data_source` tool queries Aurora directly |
-
-Both use Felt's **source layer** feature — the map connects live to Aurora, so data updates flow through automatically.
+Both produce **live source layers** — the map stays connected to Aurora, so data updates flow through automatically.
 
 ---
 
@@ -163,10 +178,11 @@ Both use Felt's **source layer** feature — the map connects live to Aurora, so
 
 | Decision | Choice | Rationale |
 |---|---|---|
+| Two-layer architecture | Wherobots MCP (data eng) + Strands/Felt MCP (maps) | Clean separation: data engineer builds pipeline, analyst explores maps |
 | Geographic scope | San Diego, CA | Wildfire + flood + severe weather overlap; compact for workshop |
 | Asset type | Buildings (Overture) | Available via Wherobots Open Data; 358K in San Diego |
-| Aurora schema | `workshop` | Isolated from other data; clean for CloudFormation seeding |
-| No Aurora MCP | Agent uses psycopg2 via skills | Simpler setup; skills + code execution is more flexible |
+| Aurora as handoff | `workshop` schema | Aurora bridges the two layers — pipeline writes, agent reads |
+| No Aurora MCP | Agent uses psycopg2 + Felt source layers | Felt MCP already queries Aurora; adding a third MCP is redundant |
 | Gold persistence | Iceberg + Aurora | Iceberg for reprocessing, Aurora for serving and Felt connectivity |
 | Normalization | Min-max (0–1 range) | Intuitive for workshop; AOI-relative (not comparable across regions) |
 | Risk tiers | High / Elevated / Moderate / Low | 4 tiers, no "Critical" — matches actual data distribution |
