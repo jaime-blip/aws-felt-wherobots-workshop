@@ -123,7 +123,38 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 }
 ```
 
-### Step 4 — Verify connections
+### Step 4 — Connect Felt to Aurora PostgreSQL
+
+This step creates a **Felt data source** so the Map Builder Agent (Part 2) can query Aurora and create maps directly.
+
+1. Go to **Felt** → **Workspace Settings** → **Sources** → **Add Source**
+2. Select **PostgreSQL** from the source types
+3. Enter your Aurora connection details:
+   - **Host:** Your Aurora writer endpoint (from CloudFormation output or `.env`)
+   - **Port:** `5432`
+   - **Database:** `workshop`
+   - **Username / Password:** From your Aurora credentials
+   - **Schema:** `workshop`
+4. Click **Test Connection** — you should see a green checkmark
+5. Click **Save** to create the source
+6. Copy the **Source ID** — visible in the URL: `https://felt.com/workspace/sources/<SOURCE_ID>`
+
+   Or via API:
+   ```bash
+   curl -s -H "Authorization: Bearer $FELT_API_TOKEN" \
+     https://felt.com/api/v2/sources | python3 -m json.tool
+   ```
+
+7. Update `.env` with your source ID:
+   ```bash
+   FELT_SOURCE_ID=<your-source-id>
+   ```
+
+> **For instructor-led workshops:** The Felt source is pre-configured. You'll receive the `FELT_SOURCE_ID` with your other credentials.
+>
+> **Network note:** Felt connects from its infrastructure to your Aurora. For the workshop, Aurora is pre-configured with the correct security group rules. For self-service, see `docs/felt-aurora-connection.md` for network options.
+
+### Step 5 — Verify connections
 
 **Aurora PostgreSQL:**
 ```bash
