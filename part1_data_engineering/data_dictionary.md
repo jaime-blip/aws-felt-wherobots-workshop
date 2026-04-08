@@ -276,4 +276,4 @@ Each Gold table is written to three destinations:
 |---|---|---|
 | Wherobots Iceberg | Apache Iceberg | `org_catalog.gold.<table_name>` |
 | S3 GeoParquet | GeoParquet | `s3://wbts-wbc-ew4bgi08zb/w23vimqmu7/data/shared/gold/<table_name>` |
-| Aurora PostgreSQL | JDBC / PostGIS | `gold.<table_name>` (geometries stored as WKT) |
+| Aurora PostgreSQL | JDBC / PostGIS | `workshop.<table_name>` (geometries stored as WKT) |

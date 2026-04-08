@@ -177,7 +177,7 @@ Each Gold table is written to **at least** one destination. Typical destinations
 |-------------|--------|-------------|
 | Wherobots Iceberg | `org_catalog.gold.<table>` | Always — primary persistence for reprocessing and querying |
 | S3 GeoParquet | `s3://<bucket>/gold/<table>` | When downstream consumers need file-based access |
-| Aurora PostgreSQL | `gold.<table>` via JDBC | When serving to web applications or map platforms |
+| Aurora PostgreSQL | `workshop.<table>` via JDBC | When serving to web applications or map platforms |
 
 ### Write Order
 

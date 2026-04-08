@@ -1,19 +1,19 @@
 -- =============================================================================
--- Aurora PostgreSQL (PostGIS) — Gold Layer Schema
+-- Aurora PostgreSQL (PostGIS) — Workshop Schema
 --
--- These DDL statements create the Gold tables in Aurora for serving to Felt
+-- These DDL statements create the Workshop tables in Aurora for serving to Felt
 -- dashboards and downstream consumers. Run once against your Aurora cluster.
 --
 -- Prerequisites:
 --   CREATE EXTENSION IF NOT EXISTS postgis;
 -- =============================================================================
 
-CREATE SCHEMA IF NOT EXISTS gold;
+CREATE SCHEMA IF NOT EXISTS workshop;
 
 -- ── Scoring Configuration ────────────────────────────────────────────────────
 -- Stores per-industry factor weights so dashboards can reference the methodology.
 
-CREATE TABLE gold.scoring_config (
+CREATE TABLE workshop.scoring_config (
     config_id            TEXT PRIMARY KEY,
     industry             TEXT NOT NULL,
     factor_name          TEXT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE gold.scoring_config (
 
 -- ── Insurance Exposure ───────────────────────────────────────────────────────
 
-CREATE TABLE gold.insurance_exposure (
+CREATE TABLE workshop.insurance_exposure (
     asset_id              TEXT PRIMARY KEY,
     geometry              GEOMETRY(Polygon, 4326) NOT NULL,
     building_class        TEXT,
@@ -48,12 +48,12 @@ CREATE TABLE gold.insurance_exposure (
     computed_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_insurance_exposure_geom ON gold.insurance_exposure USING GIST(geometry);
-CREATE INDEX idx_insurance_exposure_risk ON gold.insurance_exposure(risk_tier);
+CREATE INDEX idx_insurance_exposure_geom ON workshop.insurance_exposure USING GIST(geometry);
+CREATE INDEX idx_insurance_exposure_risk ON workshop.insurance_exposure(risk_tier);
 
 -- ── Commercial Real Estate Risk ──────────────────────────────────────────────
 
-CREATE TABLE gold.cre_risk (
+CREATE TABLE workshop.cre_risk (
     asset_id                  TEXT PRIMARY KEY,
     geometry                  GEOMETRY(Polygon, 4326) NOT NULL,
     building_class            TEXT,
@@ -69,12 +69,12 @@ CREATE TABLE gold.cre_risk (
     computed_at               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_cre_risk_geom   ON gold.cre_risk USING GIST(geometry);
-CREATE INDEX idx_cre_risk_screen ON gold.cre_risk(acquisition_screen_flag);
+CREATE INDEX idx_cre_risk_geom   ON workshop.cre_risk USING GIST(geometry);
+CREATE INDEX idx_cre_risk_screen ON workshop.cre_risk(acquisition_screen_flag);
 
 -- ── Capital Markets Signals ──────────────────────────────────────────────────
 
-CREATE TABLE gold.capital_markets_signals (
+CREATE TABLE workshop.capital_markets_signals (
     asset_id                   TEXT PRIMARY KEY,
     geometry                   GEOMETRY(Polygon, 4326) NOT NULL,
     building_class             TEXT,
@@ -91,13 +91,13 @@ CREATE TABLE gold.capital_markets_signals (
     computed_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_capital_markets_geom ON gold.capital_markets_signals USING GIST(geometry);
+CREATE INDEX idx_capital_markets_geom ON workshop.capital_markets_signals USING GIST(geometry);
 
 -- ── Energy & Utilities Asset Risk ────────────────────────────────────────────
 -- NOTE: Scores building footprints as a proxy for energy-adjacent assets.
 -- Does not contain actual utility infrastructure (substations, lines, pipelines).
 
-CREATE TABLE gold.energy_asset_risk (
+CREATE TABLE workshop.energy_asset_risk (
     asset_id                 TEXT PRIMARY KEY,
     geometry                 GEOMETRY(Polygon, 4326) NOT NULL,
     building_class           TEXT,
@@ -113,4 +113,4 @@ CREATE TABLE gold.energy_asset_risk (
     computed_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_energy_asset_geom ON gold.energy_asset_risk USING GIST(geometry);
+CREATE INDEX idx_energy_asset_geom ON workshop.energy_asset_risk USING GIST(geometry);
