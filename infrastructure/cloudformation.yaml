@@ -144,7 +144,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Bastion host — SSM only (no inbound SSH)
+      GroupDescription: Bastion host - SSM only, no inbound SSH
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -156,7 +156,7 @@ Resources:
   AuroraSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Aurora PostgreSQL — accept traffic from bastion on 5432
+      GroupDescription: Aurora PostgreSQL - accept traffic from bastion on 5432
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
