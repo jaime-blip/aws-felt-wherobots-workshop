@@ -43,11 +43,13 @@ aws cloudformation validate-template \
   --template-body file://infrastructure/cloudformation.yaml \
   --region us-west-2
 
-# Check it has the required resources
-grep -E "AWS::RDS|AWS::EC2|AWS::IAM|AWS::Bedrock" infrastructure/cloudformation.yaml
+# Check it has the required resources (Aurora, VPC, IAM, security groups — no EC2)
+grep -E "AWS::RDS|AWS::IAM" infrastructure/cloudformation.yaml
+# Should NOT contain EC2 instance resources
+grep -c "AWS::EC2::Instance" infrastructure/cloudformation.yaml  # Should be 0
 ```
 
-**Expected:** Template validates. Contains Aurora, EC2 (bastion), VPC, IAM, security group resources.
+**Expected:** Template validates. Contains Aurora, VPC, IAM, security group resources. No EC2 instances.
 
 ## Test 2: Schema consistency audit
 
@@ -115,8 +117,10 @@ grep "felt-aurora-connection.md" workshop-step-by-step.md
 aws cloudformation deploy \
   --template-file infrastructure/cloudformation.yaml \
   --stack-name geospatial-workshop-test \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides MasterUsername=workshop_admin MasterUserPassword=<password> \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+      DBMasterUsername=workshop_admin \
+      DBMasterPassword='YourSecurePassword123!' \
   --region us-west-2
 
 # Get outputs
@@ -124,16 +128,18 @@ aws cloudformation describe-stacks \
   --stack-name geospatial-workshop-test \
   --query "Stacks[0].Outputs" --output table
 
-# Connect to Aurora via bastion (SSM)
-BASTION_ID=$(aws cloudformation describe-stacks \
+# Connect directly to Aurora from your machine
+AURORA_ENDPOINT=$(aws cloudformation describe-stacks \
   --stack-name geospatial-workshop-test \
-  --query "Stacks[0].Outputs[?OutputKey=='BastionInstanceId'].OutputValue" \
+  --query "Stacks[0].Outputs[?OutputKey=='AuroraEndpoint'].OutputValue" \
   --output text)
 
-aws ssm start-session --target $BASTION_ID
+AURORA_DSN="postgresql://workshop_admin:YourSecurePassword123!@${AURORA_ENDPOINT}:5432/workshop"
 
-# From bastion, seed data
-AURORA_DSN=postgresql://workshop_admin:<password>@<aurora-endpoint>:5432/workshop
+# Test connection
+psql "$AURORA_DSN" -c "SELECT 1"
+
+# Seed data
 python3 data/seed/import_tables.py
 
 # Run verification from workshop step-by-step Step 5
@@ -175,6 +181,9 @@ test -f docs/felt-aurora-connection.md && echo "✅ Felt guide" || echo "❌ Fel
 # Schema check
 test $(grep -c "gold\." part1_data_engineering/aurora_schema.sql) -eq 0 && echo "✅ No gold.* in schema SQL" || echo "❌ gold.* still in schema SQL"
 test $(grep -c "workshop\." part1_data_engineering/aurora_schema.sql) -gt 0 && echo "✅ workshop.* in schema SQL" || echo "❌ No workshop.* in schema SQL"
+
+# No EC2 in CloudFormation
+test $(grep -c "AWS::EC2::Instance" infrastructure/cloudformation.yaml) -eq 0 && echo "✅ No EC2 instance in CFN" || echo "❌ EC2 instance still in CFN"
 
 # Env completeness
 grep -q "BEDROCK_MODEL_ID" .env.example && echo "✅ BEDROCK_MODEL_ID in .env.example" || echo "❌ BEDROCK_MODEL_ID missing"

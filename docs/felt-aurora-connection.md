@@ -7,27 +7,28 @@ workshop tables and create maps via the Felt API.
 ## Prerequisites
 
 - A deployed Aurora PostgreSQL cluster (see `infrastructure/README.md`)
-- Network connectivity from Felt to Aurora (Aurora must be publicly accessible
-  **or** you must configure VPC peering / a bastion tunnel — see notes below)
+- Aurora must be publicly accessible (the workshop CloudFormation template
+  configures this by default)
 - A Felt account with API access
 
 ## Step-by-Step
 
-### 1. Open Felt Source Settings
+### 1. Open a Map in Felt
 
-Navigate to **Felt** → **Workspace Settings** → **Sources** → **Add Source**.
+Open any existing **Map** in Felt, or create a new one. Data sources are
+created from within a map, not from workspace settings.
 
-> 📸 *Screenshot: Felt workspace settings page showing the "Sources" tab
-> with the "Add Source" button highlighted.*
+### 2. Add a New Data Source
 
-### 2. Select PostgreSQL
+Click **"Add to map"** (the **+** button in the layer panel), then select
+**"Connect a source"** or **"New data source"**.
 
-Choose **PostgreSQL** from the list of available source types.
+### 3. Select PostgreSQL
 
-> 📸 *Screenshot: Source type selection modal with "PostgreSQL" highlighted
-> among options like Snowflake, BigQuery, Databricks, etc.*
+Choose **PostgreSQL** from the list of available source types (alongside
+Snowflake, BigQuery, Databricks, etc.).
 
-### 3. Enter Connection Details
+### 4. Enter Connection Details
 
 Fill in the connection form with your Aurora cluster details:
 
@@ -40,47 +41,34 @@ Fill in the connection form with your Aurora cluster details:
 | **Password** | Your Aurora master password |
 | **Schema** | `workshop` |
 
-> 📸 *Screenshot: PostgreSQL connection form with fields filled in.
-> The host field shows the Aurora endpoint format.*
-
-### 4. Test & Save the Connection
+### 5. Test & Save the Connection
 
 Click **Test Connection**. If successful, you'll see a green check mark.
 Then click **Save** to create the source.
 
-> 📸 *Screenshot: Connection test success state with green checkmark
-> and the "Save" button enabled.*
+The source is now available across your entire workspace — you can use it
+from any map.
 
-### 5. Get the Source ID
+### 6. Get the Source ID
 
-After saving, the source appears in your sources list. The **Source ID** is
-visible in the URL when you click on the source:
-
-```
-https://felt.com/workspace/sources/<SOURCE_ID>
-```
-
-You can also find it via the Felt API:
+After saving, retrieve the Source ID via the Felt API:
 
 ```bash
 curl -s -H "Authorization: Bearer $FELT_API_TOKEN" \
   https://felt.com/api/v2/sources | jq '.sources[] | {id, name}'
 ```
 
-> 📸 *Screenshot: Source detail page with the source ID visible in the
-> browser URL bar, highlighted with a red box.*
-
-### 6. Update Your `.env`
+### 7. Update Your `.env`
 
 Add the source ID to your `.env` file at the project root:
 
 ```bash
-FELT_SOURCE_ID=<your-source-id-from-step-5>
+FELT_SOURCE_ID=<your-source-id-from-step-6>
 ```
 
-### 7. Verify It Works
+### 8. Verify It Works
 
-Test the connection by running a quick query via the Felt API:
+Test the connection by adding a source layer to a map via the Felt API:
 
 ```bash
 curl -s -X POST \
@@ -112,10 +100,9 @@ for the workshop team — it will not work for your Aurora cluster.
 Felt connects to your database from Felt's infrastructure. Your Aurora cluster
 needs to be reachable:
 
-- **Option A (simple):** Make Aurora publicly accessible and add Felt's IP
-  ranges to the security group. Contact Felt support for current IP ranges.
-- **Option B (secure):** Use an SSH tunnel or bastion as a SOCKS proxy.
-  This is more complex but keeps Aurora in private subnets.
-- **Option C (workshop):** The workshop CloudFormation template places Aurora
-  in private subnets. For the workshop, the Felt team pre-configures the
-  source connection. Attendees receive the `FELT_SOURCE_ID` as part of setup.
+- **Workshop setup (default):** Aurora is publicly accessible with the security
+  group allowing inbound on port 5432. This works out of the box for the
+  workshop. In production, restrict the security group to Felt's IP ranges
+  (contact Felt support for current ranges) or your corporate CIDR.
+- **Production option:** Use VPC peering or AWS PrivateLink for private
+  connectivity between Felt and your Aurora cluster.

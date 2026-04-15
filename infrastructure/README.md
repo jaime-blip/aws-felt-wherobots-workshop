@@ -7,9 +7,8 @@ This CloudFormation template provisions all AWS resources needed for the Geospat
 | Resource | Details |
 |---|---|
 | **VPC** | 10.0.0.0/16 with 2 public + 2 private subnets across 2 AZs |
-| **Aurora PostgreSQL Serverless v2** | Engine 16.4, 0.5–8 ACU, private subnets, encrypted |
-| **Bastion Host** | t3.micro with SSM Session Manager (no SSH keys needed) |
-| **Security Groups** | Bastion → Aurora on 5432; Aurora internal replication |
+| **Aurora PostgreSQL Serverless v2** | Engine 16.4, 0.5–8 ACU, public subnets, encrypted, publicly accessible |
+| **Security Groups** | Aurora inbound on 5432 (open for workshop; restrict in production) |
 | **IAM Role** | Bedrock `InvokeModel` for Claude and Nova models |
 
 ## Prerequisites
@@ -41,24 +40,24 @@ aws cloudformation deploy \
      --output table
    ```
 
-2. **Connect to the bastion via SSM:**
-
-   ```bash
-   aws ssm start-session --target <BastionInstanceId>
-   ```
-
-3. **Enable PostGIS on Aurora** (from the bastion):
+2. **Connect directly to Aurora from your machine:**
 
    ```bash
    psql "postgresql://workshop_admin:<PASSWORD>@<AuroraEndpoint>:5432/workshop"
    ```
+
+3. **Enable PostGIS on Aurora:**
 
    ```sql
    CREATE EXTENSION IF NOT EXISTS postgis;
    CREATE SCHEMA IF NOT EXISTS workshop;
    ```
 
-4. **Seed the database** — see `data/seed/README.md` for import instructions.
+4. **Seed the database** — see `data/seed/README.md` for import instructions, or run:
+
+   ```bash
+   python3 data/seed/import_tables.py
+   ```
 
 5. **Update `.env`** with the Aurora DSN from the stack outputs:
 

@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   AWS Geospatial Workshop — Aurora PostgreSQL Serverless v2 (PostGIS),
-  Bastion Host (SSM), VPC, Security Groups, and Bedrock IAM Role.
+  VPC, Security Groups, and Bedrock IAM Role.
 
 Parameters:
   VpcCidr:
@@ -40,11 +40,6 @@ Parameters:
     Type: String
     Default: workshop
     Description: Default database name
-
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64'
-    Description: Latest Amazon Linux 2023 AMI (ARM64)
 
 Resources:
   # ════════════════════════════════════════════════════════════════
@@ -141,51 +136,30 @@ Resources:
   # Security Groups
   # ════════════════════════════════════════════════════════════════
 
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Bastion host - SSM only, no inbound SSH
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: '0.0.0.0/0'
-      Tags:
-        - Key: Name
-          Value: geospatial-workshop-bastion-sg
-
   AuroraSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Aurora PostgreSQL - accept traffic from bastion on 5432
+      GroupDescription: Aurora PostgreSQL - accept inbound on 5432
       VpcId: !Ref VPC
       SecurityGroupIngress:
+        # NOTE: In production, restrict this to your corporate IP range or VPN CIDR.
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: Bastion host access
+          CidrIp: '0.0.0.0/0'
+          Description: PostgreSQL access (restrict in production)
       Tags:
         - Key: Name
           Value: geospatial-workshop-aurora-sg
 
-  AuroraInternalIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref AuroraSecurityGroup
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      SourceSecurityGroupId: !Ref AuroraSecurityGroup
-      Description: Aurora internal replication
-
   # ════════════════════════════════════════════════════════════════
-  # IAM — Bastion Instance Role (SSM + Bedrock)
+  # IAM — Workshop Bedrock Role
   # ════════════════════════════════════════════════════════════════
 
-  BastionRole:
+  WorkshopBedrockRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: geospatial-workshop-bastion-role
+      RoleName: geospatial-workshop-bedrock-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -193,8 +167,6 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: BedrockInvokeAccess
           PolicyDocument:
@@ -210,35 +182,6 @@ Resources:
                   - 'arn:aws:bedrock:*:*:inference-profile/us.anthropic.claude-*'
                   - 'arn:aws:bedrock:*:*:inference-profile/us.amazon.nova-*'
 
-  BastionInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref BastionRole
-
-  # ════════════════════════════════════════════════════════════════
-  # Bastion Host (t3.micro, SSM Session Manager)
-  # ════════════════════════════════════════════════════════════════
-
-  BastionInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t3.micro
-      ImageId: !Ref LatestAmiId
-      SubnetId: !Ref PublicSubnet1
-      IamInstanceProfile: !Ref BastionInstanceProfile
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      Tags:
-        - Key: Name
-          Value: geospatial-workshop-bastion
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y postgresql16 python3.11 python3.11-pip
-          pip3.11 install psycopg2-binary python-dotenv felt-python boto3
-
   # ════════════════════════════════════════════════════════════════
   # Aurora PostgreSQL Serverless v2
   # ════════════════════════════════════════════════════════════════
@@ -246,10 +189,10 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Private subnets for Aurora
+      DBSubnetGroupDescription: Public subnets for Aurora (workshop - publicly accessible)
       SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
@@ -277,7 +220,7 @@ Resources:
       DBClusterIdentifier: !Ref AuroraCluster
       DBInstanceClass: db.serverless
       Engine: aurora-postgresql
-      PubliclyAccessible: false
+      PubliclyAccessible: true
 
 # ════════════════════════════════════════════════════════════════
 # Outputs
@@ -294,15 +237,9 @@ Outputs:
     Description: Connection string template (fill in password)
     Value: !Sub 'postgresql://${DBMasterUsername}:<PASSWORD>@${AuroraCluster.Endpoint.Address}:5432/${DBName}'
 
-  BastionInstanceId:
-    Description: EC2 Instance ID for SSM Session Manager
-    Value: !Ref BastionInstance
-    Export:
-      Name: !Sub '${AWS::StackName}-BastionInstanceId'
-
   BedrockRoleArn:
     Description: IAM Role ARN with Bedrock InvokeModel permissions
-    Value: !GetAtt BastionRole.Arn
+    Value: !GetAtt WorkshopBedrockRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-BedrockRoleArn'
 
