@@ -61,6 +61,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 | git | any | `git --version` |
 | AWS CLI | v2 | `aws --version` |
 | Kiro IDE | latest | [kiro.dev](https://kiro.dev) (optional, recommended) |
+| Wherobots Extension | latest | Install via `kiro --install-extension wherobots.wherobotsjobsubmit` |
 
 ---
 
@@ -100,7 +101,22 @@ AWS_PROFILE=default
 AWS_DEFAULT_REGION=us-west-2
 ```
 
-### Step 3 — Configure MCP servers
+### Step 3 — Set up Kiro with Wherobots extension (recommended)
+
+If you're using Kiro, install the Wherobots extension for integrated catalog browsing, AI-assisted notebook authoring, and remote compute:
+
+1. Install: `kiro --install-extension wherobots.wherobotsjobsubmit`
+2. Command Palette (Cmd+Shift+P) → **Wherobots: Set API Key** → paste your Wherobots key
+3. The extension auto-configures the MCP server and Data Hub sidebar
+
+To connect notebooks to Wherobots compute (needed for Part 1):
+1. Wherobots sidebar → **Create Workspace** → set region and instance size → **Start**
+2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
+3. Code now executes on Wherobots Cloud (Sedona)
+
+> **Full guide:** [`docs/kiro-wherobots-setup.md`](docs/kiro-wherobots-setup.md) covers installation, MCP config, runtime connection, Data Hub, and troubleshooting.
+
+### Step 4 — Configure MCP servers
 
 Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 
@@ -123,7 +139,7 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 }
 ```
 
-### Step 4 — Connect Felt to Aurora PostgreSQL
+### Step 5 — Connect Felt to Aurora PostgreSQL
 
 This step creates a **Felt data source** so the Map Builder Agent (Part 2) can query Aurora and create maps directly.
 
@@ -155,7 +171,7 @@ This step creates a **Felt data source** so the Map Builder Agent (Part 2) can q
 >
 > **Network note:** Felt connects from its infrastructure to your Aurora. For the workshop, Aurora is publicly accessible with the correct security group rules. For production deployments, see `docs/felt-aurora-connection.md` for network considerations.
 
-### Step 5 — Verify connections
+### Step 6 — Verify connections
 
 **Aurora PostgreSQL:**
 ```bash
