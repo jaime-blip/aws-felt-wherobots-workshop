@@ -220,7 +220,7 @@ Overture Buildings ──┐
 USFS Burn Probability┤                              │
 USFS Flame Length ───┘                              │
                                                     ├──▶ asset_enriched ──▶ insurance_exposure
-MODIS Flood NRT ────▶ asset_flood_exposure ─────────┤                  ──▶ cre_risk
+OPERA DSWx-S1 ──────▶ asset_flood_exposure ─────────┤                  ──▶ cre_risk
                                                     │                  ──▶ capmarkets_signals
 NOAA SWDI Hail ──┐                                  │                  ──▶ energy_infra_risk
 NOAA SWDI Struct ┼──▶ asset_weather_density ────────┘
@@ -258,7 +258,7 @@ This shows actual hail events with location, severity, and timestamp.
 | Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 358K building footprints in San Diego |
 | USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid (32 GB) |
 | USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs |
-| MODIS Flood NRT | `org_catalog.modis.MCDWD_L3_F3_NRT` | Raster | Near real-time flood extent |
+| OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m) |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail events with severity |
 | NOAA SWDI — Mesocyclone | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone detections |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado vortex signatures |
@@ -276,10 +276,10 @@ The Silver layer enriches each building with hazard data through three spatial o
 
 > **Key insight:** A building near Poway might sit directly on high burn probability land, while its neighbor 200m away is shielded by a ridge. This is why nearby buildings get different scores.
 
-**Flood exposure** — Spatial join + temporal aggregation:
+**Flood exposure** — Weekly zonal statistics (per ISO week):
 | Input | Operation | Output |
 |-------|-----------|--------|
-| Overture Buildings + MODIS Flood NRT raster (7 dates) | Join flood tiles to buildings, aggregate across dates | `asset_flood_exposure` — max flood extent, event count, duration |
+| Overture Buildings + OPERA DSWx-S1 SAR flood raster (weekly) | For each ISO week in the flood window, zonal-stat max water-classification per building → append to Iceberg | `asset_flood_exposure` — one row per (asset, week); silver-to-gold aggregates to max class, event count, duration |
 
 **Severe weather density** — KNN spatial join (`ST_KNN`):
 | Input | Operation | Output |
@@ -540,7 +540,7 @@ Part 1 and Part 2 form a complete geospatial AI stack:
 
 | Layer | Technology | Role |
 |---|---|---|
-| **Data Sources** | NOAA, USFS, MODIS, Overture Maps | Raw geospatial data |
+| **Data Sources** | NOAA, USFS, OPERA (NASA), Overture Maps | Raw geospatial data |
 | **Spatial Processing** | Wherobots Cloud (Apache Sedona) | Spatial joins, zonal stats, risk scoring |
 | **Data Store** | Amazon Aurora PostgreSQL (PostGIS) | Production database with spatial indexing |
 | **AI Orchestration** | AWS Strands Agents SDK + Amazon Bedrock | Natural language → code generation → execution |

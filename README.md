@@ -119,7 +119,7 @@ Run the Map Builder Agent:
 │
 ├── data/
 │   ├── burn_probability_rasters/      # USFS wildfire raster data
-│   ├── flood_rasters/                 # MODIS flood GeoTIFFs
+│   ├── flood_rasters/                 # OPERA DSWx-S1 flood GeoTIFFs
 │   └── seed/                          # Export script for CloudFormation seeding
 │
 └── tmp/                               # Dev-only scripts (not part of workshop)

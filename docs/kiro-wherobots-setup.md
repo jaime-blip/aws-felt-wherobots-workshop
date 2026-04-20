@@ -108,7 +108,7 @@ For this workshop, the key tables are:
 |---|---|
 | Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` |
 | USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` |
-| MODIS Flood NRT | `org_catalog.modis.MCDWD_L3_F3_NRT` |
+| OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` |
 | NOAA Severe Weather | `org_catalog.noaa_swdi.hail` / `structure` / `tvs` |
 
 ---
