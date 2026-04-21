@@ -28,7 +28,7 @@ analytics or joins at this layer.
 |-----------|--------------|
 | **Schema enforcement** | Every column has an explicit type (no implicit STRING from CSV). Geometry columns are proper GEOMETRY type. |
 | **Geometry validity** | All geometry columns contain valid geometries created via `ST_Point`, `ST_GeomFromText`, or raster functions. No raw WKT strings as STRING columns. |
-| **CRS tagging** | All raster data has CRS set via `RS_SetSRID`. All vector data is in EPSG:4326. |
+| **CRS tagging** | Sedona auto-detects raster CRS from GeoTIFF metadata — do not blanket-apply `RS_SetSRID(raster, 4326)`. Document source CRS in a `crs` STRING column per table (e.g., `EPSG:32611` for OPERA DSWx-S1, `EPSG:5070` for USFS CONUS rasters). All vector data is in EPSG:4326. |
 | **Deduplication** | If the source has natural keys, duplicates are removed. Document the dedup key. |
 | **Provenance** | Each row can be traced to its source. Include `ingested_at` timestamp. |
 | **Idempotency** | Running the Bronze notebook twice produces the same result (`createOrReplace`). |
@@ -46,7 +46,7 @@ org_catalog.<data_domain>.<source_dataset>
 Examples:
 - `org_catalog.noaa_swdi.hail`
 - `org_catalog.wildfire_risk.burn_probability_conus`
-- `org_catalog.opera.dswx_s1`
+- `org_catalog.modis.MCDWD_L3_F3_NRT`
 
 ### Required Metadata Columns
 
@@ -67,13 +67,34 @@ produce per-entity enrichment metrics. The heavy compute layer.
 
 | Guarantee | What It Means |
 |-----------|--------------|
-| **Per-entity granularity** | Every Silver table has exactly one row per entity (building, parcel, asset). Aggregation is complete — no duplicate entity rows. |
+| **Per-entity granularity** | Every Silver table has exactly one row per entity (building, parcel, asset). Aggregation is complete — no duplicate entity rows. **Exception**: temporal tables (see below). |
 | **AOI-filtered** | Only entities within the declared AOI polygon appear. |
-| **Temporally bounded** | All event/observation data is filtered to the declared temporal windows. Window boundaries are recorded in the table. |
+| **Temporally bounded** | All event/observation data is filtered to the declared temporal windows. Window boundaries are recorded in the table. Use **per-source** temporal windows — different data sources rarely share the same observation period. |
 | **NULL semantics** | Missing data is NULL, not 0 or -1. NULL means "no data available", not "no risk". |
 | **Coverage flags** | The unified enriched table includes boolean `has_<source>_data` flags to distinguish "no data" from "no risk". |
 | **Independent enrichments** | Each hazard/signal source has its own Silver table. Reprocessing one does not require reprocessing others. |
-| **Unified conflation** | The final Silver output (`asset_enriched`) LEFT JOINs all enrichment tables onto the entity base. |
+| **Unified conflation** | The final Silver output (`asset_enriched`) LEFT JOINs all 1:1 enrichment tables onto the entity base. Temporal tables are kept separate (see below). |
+
+### Temporal (Multi-Row) Silver Tables
+
+Some sources produce multiple rows per entity (e.g., weekly flood observations). These must
+**not** be joined into `asset_enriched` — doing so fans out the 1:1 table and breaks all
+downstream assumptions.
+
+**Pattern**: Write temporal data to its own Silver Iceberg table (e.g., `asset_flood_exposure`
+with one row per asset × week). Gold loads this table separately, aggregates to per-asset,
+then LEFT JOINs the aggregates onto the enriched data.
+
+**Week-by-week Iceberg append** for large temporal datasets:
+```python
+for i, (week_start, week_end) in enumerate(week_boundaries):
+    week_df = ...  # filter to this week, join, zonal stats
+    if i == 0:
+        week_df.writeTo(TABLE).createOrReplace()
+    else:
+        week_df.writeTo(TABLE).append()
+```
+This caps Spark shuffle at `buildings × 1 week of tiles` per iteration.
 
 ### What Silver Does NOT Do
 - No normalization to [0, 1] (that's Gold)
@@ -84,13 +105,13 @@ produce per-entity enrichment metrics. The heavy compute layer.
 ### Table Naming Convention
 ```
 org_catalog.silver.asset_<source>_<operation>
-org_catalog.silver.asset_enriched           # Always the final unified table
+org_catalog.silver.asset_enriched           # Always the final unified table (1:1)
 ```
 Examples:
-- `org_catalog.silver.asset_wildfire_exposure`
-- `org_catalog.silver.asset_flood_exposure`
-- `org_catalog.silver.asset_weather_density`
-- `org_catalog.silver.asset_enriched`
+- `org_catalog.silver.asset_wildfire_exposure` (1:1 per asset)
+- `org_catalog.silver.asset_flood_exposure` (temporal: 1 row per asset × week)
+- `org_catalog.silver.asset_weather_density` (1:1 per asset)
+- `org_catalog.silver.asset_enriched` (1:1 — wildfire + weather only, NO flood)
 
 ### Spatial Operation Selection Guide
 
@@ -98,12 +119,37 @@ Choose the correct spatial operation based on the source data type and the quest
 
 | Source Type | Question | Operation | Sedona Function |
 |-------------|----------|-----------|----------------|
-| Raster | "What is the value at this location?" | Zonal Statistics | `RS_ZonalStats(raster, geometry, 'mean')` |
+| Raster (single-band) | "What is the value at this location?" | Zonal Statistics (3-arg) | `RS_ZonalStats(raster, geometry, 'mean')` |
+| Raster (multi-band) | "What is band N's value?" | Zonal Statistics (5-arg) | `RS_ZonalStats(raster, geometry, band_idx, 'max', true)` |
 | Raster | "Does this location intersect a hazard zone?" | Raster-Vector Filter | `RS_Intersects(raster, geometry)` |
 | Vector (events) | "How many events are near this location?" | KNN Spatial Join | `ST_KNN(a.geom, b.geom, k, true, radius)` |
 | Vector (events) | "What is the nearest event?" | KNN (k=1) | `ST_KNN(a.geom, b.geom, 1, true, radius)` |
 | Vector (polygons) | "Does this location fall within a zone?" | Spatial Join | `ST_Intersects(a.geometry, b.geometry)` |
 | Vector (polygons) | "How much of the zone overlaps?" | Intersection Area | `ST_Area(ST_Intersection(a.geom, b.geom))` |
+
+**RS_ZonalStats critical notes**:
+- 3-arg form: `RS_ZonalStats(raster, geometry, 'mean')` — for single-band rasters only.
+  Do NOT add a 4th arg (e.g., `true`) — Sedona interprets the stat name as band index.
+- 5-arg form: `RS_ZonalStats(raster, geometry, 1, 'max', true)` — band index (1-based),
+  stat type, allTouched/excludeNoData. Use for multi-band rasters or when features are
+  smaller than pixel resolution.
+- For sub-pixel features (building footprints < 30m raster pixels), prefer `allTouched=true`
+  (5th arg) over `ST_Buffer`. Buffering causes a full geometry shuffle; allTouched is free.
+
+**CRS handling (Sedona 0.12+)**:
+- `RS_ZonalStats` and `RS_Intersects` **auto-reproject** the raster to match the geometry's
+  CRS. No manual `ST_Transform` is required as long as both sides have a known CRS.
+- This means OPERA (EPSG:32611), USFS wildfire (EPSG:5070), and Overture buildings
+  (EPSG:4326) can be joined without explicit projection, provided each raster source has
+  its native CRS embedded in the GeoTIFF.
+- If a raster source lacks embedded CRS metadata, `RS_SetSRID(raster, <actual_srid>)` is
+  required — but only when truly missing, not as a routine step.
+
+**ST_KNN critical note (EPSG:4326 inputs)**:
+- `ST_KNN(a.geom, b.geom, k, use_sphere, radius)` — `use_sphere` **must be `TRUE`** when
+  inputs are lon/lat (EPSG:4326). With `use_sphere=FALSE`, `radius` is interpreted as
+  degrees, producing silently wrong results (a 25km radius becomes ~0.0002 degrees of
+  search, matching almost nothing, or a 25000 radius matches the whole globe).
 
 ### Required Columns in `asset_enriched`
 
@@ -112,36 +158,39 @@ Choose the correct spatial operation based on the source data type and the quest
 | `asset_id` | STRING | Entity identifier from the base table |
 | `geometry` | GEOMETRY | Entity geometry from the base table |
 | `<entity_attributes>` | varies | Key attributes from the base table (e.g., height, num_floors, class) |
-| `<hazard_metrics>` | DOUBLE / INT | Raw metric columns from each enrichment table |
+| `<hazard_metrics>` | DOUBLE / INT | Raw metric columns from each 1:1 enrichment table |
 | `has_<source>_data` | BOOLEAN | Coverage flag per enrichment source |
-| `weather_window_start` | DATE | Pipeline parameter — SWDI filter window start |
-| `weather_window_end` | DATE | Pipeline parameter — SWDI filter window end |
-| `flood_window_start` | DATE | Pipeline parameter — OPERA flood window start (where applicable) |
-| `flood_window_end` | DATE | Pipeline parameter — OPERA flood window end (where applicable) |
+| `weather_window_start` | STRING | Weather observation window start (per-source) |
+| `weather_window_end` | STRING | Weather observation window end (per-source) |
+
+Note: Temporal window columns are per-source (e.g., `weather_window_start/end` for weather data).
+Flood temporal metadata lives in the separate flood table, not in enriched.
 
 ---
 
 ## Gold Layer — Industry-Specific Scoring
 
 ### Purpose
-Apply the 4-step scoring framework (normalize, weight, classify, derive) to produce
-industry-specific risk scores and derived business metrics.
+Apply the 5-step scoring framework (select source metrics, normalize, weight, classify, derive)
+to produce industry-specific risk scores and derived business metrics.
 
 ### Guarantees
 
 | Guarantee | What It Means |
 |-----------|--------------|
 | **Same entity count as Silver** | Every entity from `asset_enriched` appears in every Gold table. No rows dropped. |
-| **Normalized factors** | All hazard factors are in [0, 1] range via min-max scaling. |
+| **Per-industry source metrics** | Each industry uses different raw columns for its hazard factors (e.g., Insurance uses `flood_duration_days`, CRE uses `flood_max_wtr_class`). This produces genuinely different rank orderings and map distributions. |
+| **Normalized factors** | All hazard factors are in [0, 1] range via min-max scaling. The superset of source columns is normalized once; each industry maps its columns from the pool. |
 | **Weights sum to 1.0** | Per-industry weights for all factors sum to exactly 1.0. |
 | **Risk score in [0, 1]** | The weighted composite score is bounded. |
-| **Risk tier assigned** | Every row has a categorical risk tier based on the score. |
-| **Score explanation** | Every row has a JSON column breaking down the score into its component factors and weights. |
+| **Quantile-based risk tiers** | Tiers are assigned via `percent_rank()` percentile cuts, NOT fixed score thresholds. This guarantees a visually balanced map distribution (~5% critical / 15% high / 30% elevated / 30% moderate / 20% low) regardless of score skew. |
+| **Score explanation** | Every row has a JSON column breaking down the score into its component factors, weights, and source column names. |
 | **AOI-relative** | Normalization min/max are computed from the current AOI. Scores are NOT comparable across different AOIs. |
+| **Temporal aggregation** | Weekly/temporal Silver tables are aggregated to per-asset in Gold before joining onto the enriched data. |
 
 ### What Gold Does NOT Do
 - No new spatial operations (all spatial work is done in Silver)
-- No data ingestion (all data comes from `asset_enriched`)
+- No data ingestion (all data comes from `asset_enriched` + temporal Silver tables)
 
 ### Table Naming Convention
 ```
@@ -150,8 +199,26 @@ org_catalog.gold.<industry_or_usecase>_<metric_type>
 Examples:
 - `org_catalog.gold.insurance_exposure`
 - `org_catalog.gold.cre_risk`
-- `org_catalog.gold.capmarkets_signals`
+- `org_catalog.gold.capital_markets_signals`
 - `org_catalog.gold.energy_asset_risk`
+
+### Gold Data Loading Pattern
+
+```python
+# 1. Load enriched (1:1 per asset — wildfire + weather)
+enriched = sedona.table(ENRICHED_TABLE)
+
+# 2. Load temporal table separately, aggregate to per-asset
+flood_weekly = sedona.table(FLOOD_TABLE)
+flood_agg = flood_weekly.groupBy("asset_id").agg(
+    F.max("flood_max_wtr_class").alias("flood_max_wtr_class"),
+    F.sum(F.when(F.col("flood_max_wtr_class") >= 1, 1).otherwise(0)).alias("flood_event_count"),
+    F.datediff(F.max("flood_week"), F.min("flood_week")).alias("flood_duration_days"),
+)
+
+# 3. LEFT JOIN aggregates onto enriched
+enriched = enriched.join(flood_agg, on="asset_id", how="left")
+```
 
 ### Required Columns in Every Gold Table
 
@@ -159,12 +226,12 @@ Examples:
 |--------|------|-------------|
 | `asset_id` | STRING | Entity identifier |
 | `geometry` | GEOMETRY | Entity geometry |
-| `<factor_1>` | DOUBLE | Normalized factor (0-1) |
-| `<factor_2>` | DOUBLE | Normalized factor (0-1) |
-| `<factor_N>` | DOUBLE | Normalized factor (0-1) |
+| `wildfire_factor` | DOUBLE | Normalized factor (0-1), from industry-specific source column |
+| `flood_factor` | DOUBLE | Normalized factor (0-1), from industry-specific source column |
+| `severe_weather_factor` | DOUBLE | Normalized factor (0-1), from industry-specific source column |
 | `risk_score` | DOUBLE | Weighted composite (0-1) |
-| `risk_tier` | STRING | Categorical tier |
-| `score_explanation` | STRING (JSON) | Factor weights and values |
+| `risk_tier` | STRING | Categorical tier via percentile cuts |
+| `score_explanation` | STRING (JSON) | Factor weights, values, and source column names |
 | `<derived_metrics>` | varies | Industry-specific derived columns |
 
 ---
@@ -198,5 +265,10 @@ After the full pipeline runs, these invariants must hold:
 | No NULL risk scores | `SELECT COUNT(*) FROM gold_table WHERE risk_score IS NULL` = 0 |
 | Score bounds | `SELECT MIN(risk_score), MAX(risk_score) FROM gold_table` — both in [0, 1] |
 | Weights sum | Verify from `score_explanation` JSON that weights sum to 1.0 |
-| Tier consistency | Every `risk_tier` maps correctly to the score range in RISK_TIERS config |
+| Tier distribution balanced | Each industry should have ~5/15/30/30/20% tier split (quantile tiers) |
+| Industries differ | Tier distributions should visibly differ across industries (different source metrics) |
+| Source columns documented | `score_explanation` JSON includes `source_wildfire`, `source_flood`, `source_severe_weather` |
+| Temporal table separate | `asset_enriched` has 1:1 rows; weekly data in separate table |
+| Flood aggregates joined | Gold `COUNT(*)` matches enriched `COUNT(*)` after LEFT JOIN of flood aggregates |
+| Tier consistency | Every `risk_tier` matches its `RISK_PERCENTILES` cut (e.g., `critical` = top 5% of `risk_score` by `percent_rank`) |
 | Geometry preserved | `SELECT COUNT(*) FROM gold_table WHERE geometry IS NULL` = 0 |
