@@ -46,7 +46,7 @@ org_catalog.<data_domain>.<source_dataset>
 Examples:
 - `org_catalog.noaa_swdi.hail`
 - `org_catalog.wildfire_risk.burn_probability_conus`
-- `org_catalog.modis.MCDWD_L3_F3_NRT`
+- `org_catalog.opera.dswx_s1`
 
 ### Required Metadata Columns
 
@@ -114,10 +114,10 @@ Choose the correct spatial operation based on the source data type and the quest
 | `<entity_attributes>` | varies | Key attributes from the base table (e.g., height, num_floors, class) |
 | `<hazard_metrics>` | DOUBLE / INT | Raw metric columns from each enrichment table |
 | `has_<source>_data` | BOOLEAN | Coverage flag per enrichment source |
-| `baseline_window_start` | STRING | Pipeline parameter |
-| `baseline_window_end` | STRING | Pipeline parameter |
-| `event_window_start` | STRING | Pipeline parameter |
-| `event_window_end` | STRING | Pipeline parameter |
+| `weather_window_start` | DATE | Pipeline parameter — SWDI filter window start |
+| `weather_window_end` | DATE | Pipeline parameter — SWDI filter window end |
+| `flood_window_start` | DATE | Pipeline parameter — OPERA flood window start (where applicable) |
+| `flood_window_end` | DATE | Pipeline parameter — OPERA flood window end (where applicable) |
 
 ---
 

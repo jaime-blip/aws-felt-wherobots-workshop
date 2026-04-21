@@ -41,10 +41,8 @@ CREATE TABLE workshop.insurance_exposure (
     triage_priority       INTEGER,
     relative_risk_band    TEXT,
     score_explanation     JSONB,
-    event_window_start    DATE,
-    event_window_end      DATE,
-    baseline_window_start DATE,
-    baseline_window_end   DATE,
+    weather_window_start  DATE,
+    weather_window_end    DATE,
     computed_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -86,8 +84,8 @@ CREATE TABLE workshop.capital_markets_signals (
     supply_chain_vulnerability DOUBLE PRECISION,
     event_density_signal       DOUBLE PRECISION,
     score_explanation          JSONB,
-    event_window_start         DATE,
-    event_window_end           DATE,
+    weather_window_start       DATE,
+    weather_window_end         DATE,
     computed_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

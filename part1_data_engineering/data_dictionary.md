@@ -17,7 +17,7 @@ Overture Buildings    ──┐
 USFS Burn Probability ──┤                              │
 USFS Flame Length     ──┘                              │
                                                        ├──▶ asset_enriched ──▶ insurance_exposure
-MODIS Flood NRT       ────▶ asset_flood_exposure    ──┤                   ──▶ cre_risk
+OPERA DSWx-S1         ────▶ asset_flood_exposure    ──┤                   ──▶ cre_risk
                                                        │                   ──▶ capmarkets_signals
 NOAA SWDI Hail        ──┐                              │                   ──▶ energy_infra_risk
 NOAA SWDI Structure   ──┼──▶ asset_weather_density  ──┘
@@ -35,7 +35,7 @@ These are catalog-registered datasets consumed directly from Wherobots Open Data
 | Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | Global building footprints with height, floor count, class, and subtype |
 | USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | CONUS-wide burn probability grids from USFS (annual probability a pixel burns) |
 | USFS Conditional Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | CONUS-wide conditional flame length grids from USFS (expected flame length if fire occurs) |
-| MODIS Flood NRT | `org_catalog.modis.MCDWD_L3_F3_NRT` | Raster | Near real-time MODIS-derived flood extent maps with acquisition dates |
+| OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR-derived surface water / flood classification (30 m, per-acquisition) |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail event reports with severity probability and max hail size |
 | NOAA SWDI — Mesocyclone Structures | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone structure detections with max reflectivity and VIL |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado Vortex Signature detections with max delta velocity and max shear |
@@ -43,7 +43,7 @@ These are catalog-registered datasets consumed directly from Wherobots Open Data
 ### Scope Filters Applied at Ingestion
 
 - **Geographic**: All sources are clipped to the Area of Interest (AOI) polygon using `ST_Intersects` (vector) or `RS_Intersects` (raster)
-- **Temporal**: NOAA SWDI events are filtered to the full observation window (baseline start → event end)
+- **Temporal**: Each source is filtered to its own window — NOAA SWDI to `WEATHER_WINDOW_START/END`, OPERA DSWx-S1 to `FLOOD_WINDOW_START/END`. Wildfire rasters are a single CONUS snapshot (no temporal filter).
 
 ---
 
@@ -85,21 +85,20 @@ Per-building wildfire risk derived from USFS raster data via zonal statistics.
 
 ### `asset_flood_exposure`
 
-Per-building flood exposure derived from MODIS Near Real-Time flood maps via zonal statistics and temporal aggregation.
+Per-building, **per-ISO-week** flood exposure derived from OPERA DSWx-S1 SAR flood/water-classification rasters via weekly zonal statistics. One row per `(asset_id, flood_week)` pair — `silver-to-gold` aggregates these to a single row per asset at read time.
 
 | Column | Description |
 |---|---|
 | `asset_id` | Overture building ID |
 | `asset_type` | Always `building` |
 | `geometry` | Building footprint polygon |
-| `flood_max_extent` | Maximum flood extent value observed at the building across all dates |
-| `flood_event_count` | Count of distinct acquisition dates where the building intersected a flood tile |
-| `flood_duration_days` | Days between first and last flood observation at the building |
-| `observation_window_start` | Start of the temporal window |
-| `observation_window_end` | End of the temporal window |
+| `flood_week` | Monday-aligned ISO week start date for this observation |
+| `flood_max_wtr_class` | Max OPERA water classification observed that week (0=dry, 1=open water, 2=partial surface water) |
+| `observation_window_start` | `FLOOD_WINDOW_START` — pipeline parameter |
+| `observation_window_end` | `FLOOD_WINDOW_END` — pipeline parameter |
 | `computed_at` | Processing timestamp |
 
-**How it's computed**: Building footprints are spatially joined to MODIS flood raster tiles using `RS_Intersects`. For each building, `RS_ZonalStats(raster, geometry, 'max')` extracts the peak flood value per tile. Results are aggregated across all dates: the maximum flood extent, count of distinct flood acquisition dates, and the number of days between first and last observation.
+**How it's computed**: For each ISO week in `FLOOD_WINDOW_START → FLOOD_WINDOW_END`, the B01_WTR band tiles falling in that week are intersected with building footprints. `RS_ZonalStats(raster, geometry, 'max', allTouched=true)` extracts the peak water-classification value per building-week. Processing week-by-week keeps shuffle size small (buildings × 1 week of raster) and provides checkpointing — if a week fails, earlier weeks are already in Iceberg.
 
 ---
 
@@ -122,8 +121,8 @@ Per-building severe weather proximity and density derived from NOAA SWDI via KNN
 | `structure_count_25km` | Mesocyclone structure events within 25 km |
 | `tvs_count_25km` | TVS events within 25 km |
 | `max_severity` | Maximum severity value across all matched events |
-| `observation_window_start` | Start of the temporal window |
-| `observation_window_end` | End of the temporal window |
+| `observation_window_start` | `WEATHER_WINDOW_START` — pipeline parameter |
+| `observation_window_end` | `WEATHER_WINDOW_END` — pipeline parameter |
 | `computed_at` | Processing timestamp |
 
 **How it's computed**: For each of the three SWDI event types (hail, structure, TVS), a KNN spatial join finds the 10 nearest events within a 25 km search radius using `ST_KNN(building, event, 10, true, 25000)`. The `use_sphere=true` parameter ensures all distances and the search radius are geodesic (meters). Exact distances are computed via `ST_DistanceSpheroid`. Per-event-type results are written to a staging table then aggregated per building — counting events at the 5 km and 25 km thresholds and recording the nearest distance per event type.
@@ -138,9 +137,9 @@ Unified Silver table that joins all three hazard exposure layers onto the full b
 |---|---|
 | `asset_id`, `geometry`, `building_class`, `height`, `num_floors` | Overture Buildings |
 | `burn_prob_mean`, `burn_prob_max`, `flame_length_mean`, `wildfire_risk_class` | `asset_wildfire_exposure` |
-| `flood_max_extent`, `flood_event_count`, `flood_duration_days` | `asset_flood_exposure` |
+| `flood_max_wtr_class`, `flood_event_count`, `flood_duration_days` | `asset_flood_exposure` (aggregated from weekly rows in `silver-to-gold`) |
 | `event_count_5km`, `event_count_25km`, `nearest_event_dist_m`, `nearest_hail_m`, `nearest_structure_m`, `nearest_tvs_m`, `hail_count_25km`, `structure_count_25km`, `tvs_count_25km`, `max_severity` | `asset_weather_density` |
-| `baseline_window_start`, `baseline_window_end`, `event_window_start`, `event_window_end` | Pipeline configuration |
+| `weather_window_start`, `weather_window_end` | Pipeline configuration (SWDI window) |
 
 **How it's computed**: LEFT JOIN from the full AOI buildings table to each of the three Silver hazard tables on `asset_id`. Every building appears in the output; hazard columns are null if the building had no exposure in that layer.
 

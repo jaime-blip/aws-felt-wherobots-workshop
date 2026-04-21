@@ -32,7 +32,7 @@ The system has two parts — one for data engineering, one for end-user explorat
 ║  ┌──────────┐   ┌──────────┐   ┌──────────┐   JDBC   ┌──────────────┐ ║
 ║  │ RAW (S3) │──▶│ SILVER   │──▶│ GOLD     │─────────▶│ AURORA       │ ║
 ║  │ NOAA     │   │ Zonal    │   │ Scoring  │          │ PostgreSQL   │ ║
-║  │ MODIS    │   │ Stats    │   │ Weighting│          │ workshop.*   │ ║
+║  │ OPERA    │   │ Stats    │   │ Weighting│          │ workshop.*   │ ║
 ║  │ USFS     │   │ KNN Join │   │ Tiers    │          │ 358K x 4    │ ║
 ║  │ Overture │   │          │   │          │          │              │ ║
 ║  └──────────┘   └──────────┘   └──────────┘          └──────┬───────┘ ║
@@ -105,7 +105,7 @@ The system has two parts — one for data engineering, one for end-user explorat
 | NOAA SWDI — Hail | [AWS Open Data](https://registry.opendata.aws/noaa-swdi/) | Vector | `org_catalog.noaa_swdi.hail` |
 | NOAA SWDI — Mesocyclone | AWS Open Data | Vector | `org_catalog.noaa_swdi.structure` |
 | NOAA SWDI — TVS | AWS Open Data | Vector | `org_catalog.noaa_swdi.tvs` |
-| MODIS MCDWD Flood NRT | [NASA LANCE](https://nrt3.modaps.eosdis.nasa.gov/) | Raster (GeoTIFF) | `org_catalog.modis.MCDWD_L3_F3_NRT` |
+| OPERA DSWx-S1 | [NASA JPL](https://www.jpl.nasa.gov/go/opera) | Raster (Sentinel-1 SAR, 30 m) | `org_catalog.opera.dswx_s1` |
 | USFS Burn Probability | [wildfirerisk.org](https://wildfirerisk.org/) | Raster (COG) | `org_catalog.wildfire_risk.burn_probability_conus` |
 | USFS Conditional Flame Length | wildfirerisk.org | Raster (COG) | `org_catalog.wildfire_risk.conditional_flame_length_conus` |
 | Overture Buildings | [Wherobots Open Data](https://docs.wherobots.com/) | Vector (GeoParquet) | `wherobots_open_data.overture_maps_foundation.buildings_building` |
@@ -121,7 +121,7 @@ The heavy compute layer where Wherobots/Sedona performs spatial joins, zonal sta
 | Silver Table | Operation | Hazard Source |
 |---|---|---|
 | `asset_wildfire_exposure` | Zonal statistics (raster → vector) | USFS burn probability + flame length |
-| `asset_flood_exposure` | Zonal statistics + temporal aggregation | MODIS flood NRT |
+| `asset_flood_exposure` | Weekly zonal statistics (per ISO week) | OPERA DSWx-S1 SAR flood |
 | `asset_weather_density` | KNN spatial join (k=10, 25km radius) | NOAA SWDI hail / structure / TVS |
 | `asset_enriched` | LEFT JOIN of all above onto buildings | All hazards unified |
 
@@ -133,7 +133,7 @@ All Gold tables start from `asset_enriched` and apply the same framework:
 
 1. **Normalize** raw hazard metrics to [0, 1] via min-max scaling
 2. **Weight** the three factors per industry
-3. **Classify** into risk tiers (High ≥ 0.60, Elevated ≥ 0.40, Moderate ≥ 0.20, Low < 0.20)
+3. **Classify** into risk tiers via `percent_rank` over the score distribution (Critical ≥ p95, High ≥ p80, Elevated ≥ p60, Moderate ≥ p30, Low < p30)
 4. **Derive** industry-specific metrics
 
 | Gold Table | Aurora Table | Industry | Weights (wf / fl / sw) | Key Derived Metrics |
@@ -155,7 +155,7 @@ Gold tables are exported to Aurora PostgreSQL via JDBC:
 |---|---|---|
 | Aurora PostgreSQL | `workshop.*` | PostGIS (GEOMETRY + indexes) via JDBC |
 
-> DDL reference: [aurora_schema.sql](aurora_schema.sql) (note: uses `gold` schema and older column names — Aurora actual schema is `workshop` with names as listed in the Gold table above)
+> DDL reference: [aurora_schema.sql](aurora_schema.sql)
 
 ---
 
@@ -187,5 +187,5 @@ Both produce **live source layers** — the map stays connected to Aurora, so da
 | No Aurora MCP | Agent uses psycopg2 + Felt source layers | Felt MCP already queries Aurora; adding a third MCP is redundant |
 | Gold persistence | Iceberg + Aurora | Iceberg for reprocessing, Aurora for serving and Felt connectivity |
 | Normalization | Min-max (0–1 range) | Intuitive for workshop; AOI-relative (not comparable across regions) |
-| Risk tiers | High / Elevated / Moderate / Low | 4 tiers, no "Critical" — matches actual data distribution |
+| Risk tiers | Critical / High / Elevated / Moderate / Low | 5 tiers via `percent_rank` — quantile-based, so AOI-relative |
 | Refresh cadence | Full refresh (truncate-and-load) | Suitable for workshop; upsert pattern for production |
