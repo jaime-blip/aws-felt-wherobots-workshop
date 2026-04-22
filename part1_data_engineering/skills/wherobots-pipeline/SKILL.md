@@ -9,417 +9,291 @@ description: |
 
 # Wherobots Pipeline Skill
 
-Build geospatial data pipelines on Wherobots Cloud. Produces Jupyter notebooks implementing
-medallion architecture (Bronze → Silver → Gold) for any industry vertical.
+Build geospatial medallion pipelines on Wherobots Cloud. The Wherobots MCP's
+`generate_spatial_query_tool` emits a single SQL query per call — it doesn't
+know about notebook structure, medallion layers, or Wherobots idioms. This
+skill tells the agent how to orchestrate MCP calls into notebooks AND when
+to run the workshop's reference pipeline vs generate a custom one.
 
-## How the MCP generates code — what this skill layers on top
+Details are in `./references/`:
 
-The Wherobots MCP's `generate_spatial_query_tool` is a **single-query SQL generator**, not a
-notebook generator. Each call:
-
-1. Takes your natural-language prompt.
-2. Retrieves top-N Wherobots documentation snippets via RAG and injects them into the
-   generation prompt.
-3. Calls an LLM and returns raw SQL wrapped in JSON.
-
-### What the MCP does for you automatically
-
-- **Read-only enforcement** — rejects `INSERT`, `UPDATE`, `DELETE`, etc. server-side.
-- **LIMIT/OFFSET auto-injection** on outer SELECTs to cap result size.
-- **Documentation grounding** — each generation call automatically pulls relevant
-  Wherobots docs into the prompt (you don't need to do `search_documentation` first).
-- **Discovery workflow** — tool descriptions push the `docs → catalogs → tables →
-  describe_table → generate → execute` sequence.
-
-You do not need to restate any of the above in your prompts.
-
-### What the MCP does NOT do — the skill's job
-
-- **No medallion awareness.** It has no concept of Bronze/Silver/Gold, layer contracts,
-  or pipeline stages. Orchestrating the 3-notebook sequence is entirely the skill's job.
-- **No notebook output.** The MCP returns a SQL string. Wrapping it in `.ipynb` cells
-  (config / init / transform / verify / cleanup) is the skill's job.
-- **No Wherobots/Sedona idioms in the generation prompt.** The LLM that the MCP calls
-  does not receive guidance on `sedona.sql` vs `spark.sql`, `.writeTo().createOrReplace()`
-  vs `.write.format("iceberg")`, `sedona.table()` for Iceberg reads, or the `ST_Point(lon, lat)`
-  argument order. If you want Wherobots-idiomatic code, you must either (a) include the
-  rules in the natural-language prompt you pass to `generate_spatial_query_tool`, or
-  (b) post-process the returned SQL yourself.
-- **No CRS gotchas.** `use_sphere=TRUE` for `ST_KNN`, auto-reproject behavior, per-source
-  CRS tagging — none of these are in the generation prompt. Pass them in yours.
-- **No Gold scoring opinions.** `INDUSTRY_FACTORS`, `percent_rank()` tiers, score-explanation
-  JSON — the MCP will happily generate fixed-threshold tiers with identical columns across
-  industries unless your prompt tells it otherwise.
-- **No multi-query patterns.** The week-by-week flood append loop (see below) is a Python
-  for-loop around many single-query MCP calls. The MCP cannot emit that structure itself.
-
-**Practical consequence.** When you call `generate_spatial_query_tool`, your natural-language
-prompt must embed the Wherobots-specific requirements you want reflected in the output.
-See **Prompts to pass to `generate_spatial_query_tool`** below for reusable templates.
+- `medallion-spec.md` — layer contracts (Bronze/Silver/Gold guarantees)
+- `gold-scoring.md` — per-industry source metrics, `percent_rank` tiers
+- `opera-dswx-s1.md` — OPERA flood data specifics
 
 ---
 
-## Workflow
+## Participant mode — Explore / Run Reference / Generate Custom
 
-Follow these phases in order. Do not skip or proceed until each phase's output is confirmed.
+The workshop ships a pre-generated reference pipeline and pre-loaded Gold
+tables in Aurora as a safety net. The agent serves three modes from the
+same chat; infer the mode from the participant's prompt.
+
+### Explore
+
+Participant is asking about the catalog, data shape, sample values,
+"what do I have?". Use the Wherobots MCP discovery tools — `list_catalogs`,
+`list_databases`, `list_tables`, `describe_table`, optionally
+`execute_query_tool` for ad-hoc SELECTs. **Do not modify any files.**
+
+If `org_catalog` is empty or missing the workshop bronze tables, do
+not just report "it's empty" — follow the **Empty catalog** rule
+below to onboard the participant and offer to bootstrap.
+
+### Run Reference
+
+Participant wants the shipped pipeline ("run the workshop pipeline",
+"score San Diego buildings for insurance"). Execute the **reference
+notebooks** — `part1_data_engineering/bronze-to-silver.ipynb` then
+`part1_data_engineering/silver-to-gold.ipynb`.
+
+**Config-cell parameter tweaks belong here, not in Generate Custom.**
+Changing AOI bbox, scoring weights, temporal windows, or swapping to
+a different industry already in `INDUSTRY_FACTORS` is a parameter edit
+— make it in the reference notebook's config cell and re-run. No new
+notebook needed.
+
+### Generate Custom
+
+Participant wants an **analysis change** that the config cell can't
+express: a new hazard source (lightning, air quality), a new industry
+not in `INDUSTRY_FACTORS`, new derived metrics, or a different scoring
+structure. Generate new notebooks under `custom-pipelines/<short-name>/`
+(create the directory if missing). Follow the Workflow below and every
+rule in this skill.
+
+If the ask is just new weights or a new AOI, don't default to a new
+notebook — point the participant at the config cell in the existing
+reference notebook instead. Ask if unclear.
+
+### Empty catalog
+
+If `org_catalog.{noaa_swdi,opera,wildfire_risk}` tables don't exist yet
+when the participant asks to explore or run, **don't just say "run
+bootstrap"**. Use it as an onboarding moment:
+
+1. Acknowledge what they asked ("you want to see what's in your
+   catalog / run the pipeline").
+2. Tell them nothing's loaded yet — and what the workshop's bootstrap
+   will provide. Give the one-line-per-dataset summary from Onboarding
+   rule 1:
+   - `org_catalog.noaa_swdi.{hail,tvs,structure,warn}` — NEXRAD storm
+     radar observations (hail signatures, tornado vortex signatures,
+     storm-cell structure)
+   - `org_catalog.opera.dswx_s1` — NASA/JPL Sentinel-1 SAR flood
+     classification rasters
+   - `org_catalog.wildfire_risk.{burn_probability_conus, conditional_flame_length_conus}`
+     — USFS CONUS wildfire burn probability + flame length rasters
+3. Offer to run the bootstrap:
+   > *"I can kick off `python3 scripts/run_bootstrap.py` to load all
+   > seven bronze tables (~4 min on Tiny), or I can keep explaining
+   > what each dataset contains first. Which do you prefer?"*
+4. If they choose to bootstrap: run it, stream progress. If they want
+   to learn first: describe each dataset's row semantics, typical use
+   cases, and scale — THEN offer bootstrap again.
+
+Don't fabricate data, don't skip the bootstrap step silently, don't
+block exploration on having the data loaded (participants can ask
+questions about the workshop datasets conceptually before running
+bootstrap).
+
+### Protected files — structure, not parameters
+
+Do not add cells, restructure, or rewrite the analysis in the reference
+notebooks:
+
+- `part1_data_engineering/bronze-to-silver.ipynb`
+- `part1_data_engineering/silver-to-gold.ipynb`
+
+Config-cell parameter edits in those notebooks (AOI, weights, windows,
+industry selector) are the intended use — they're fine. For analysis
+changes (new source, new industry logic, new metrics), copy the
+notebook into `custom-pipelines/<name>/` and edit the copy.
+
+Never modify:
+
+- `scripts/bootstrap.py`
+- `scripts/run_bootstrap.py`
+
+---
+
+## Onboarding rules — teach as you go
+
+Assume zero geospatial background. Every participant interaction is
+partly collaboration, partly onboarding. Apply these across all three
+modes — Explore, Run Reference, Generate Custom.
+
+1. **Name the data before using it.** First mention of any dataset, add
+   one sentence on what it is and what a row represents. *"`org_catalog.noaa_swdi.hail`
+   is NOAA NEXRAD hail-radar reports — each row is one hail signature
+   observation at a given location and time. You have ~25M rows for
+   2024–2025."*
+2. **Connect data to the participant's use case.** Before designing,
+   map each hazard source to what it tells them about THEIR decision.
+   *"For your warehouse-insurance question, OPERA DSWx-S1 tells us how
+   often each warehouse sat in a flooded pixel — a claims-frequency
+   signal, not a peak-depth signal."*
+3. **Explain spatial ops in plain English before emitting SQL.** First
+   mention of each operation gets a one-sentence gloss. *"`RS_ZonalStats` —
+   for each polygon, compute a statistic over the raster pixels that
+   overlap it. Here, average wildfire burn probability per building."*
+4. **Show scale at computationally meaningful moments.** Before a large
+   join, read, or write, tell the participant roughly what's about to
+   be processed: rows in / out, size in GB, expected runtime on the
+   current runtime. *"About to zonal-stat 358K buildings against 970K
+   wildfire raster tiles. Expect ~30s on Tiny."*
+5. **Collaborate on design choices — don't pre-pick.** Where this skill's
+   rules allow more than one valid answer (which scoring weights, which
+   source metric per factor, which derived metric, window size), present
+   the options with plain-English tradeoffs and let the participant
+   choose. Never secretly decide for them.
+6. **Show artifacts after each step.** Don't just say "done" — after
+   each notebook cell or silver/gold write, emit the row count, the
+   column list, and 3–5 sample rows. Participants need to see the
+   output to trust it.
+
+Tone: 1–2 sentences per explanation, layered progressively. Not a
+lecture — just enough context that the participant always knows what's
+happening and why.
+
+---
+
+## Workflow (for Generate Custom mode only)
+
+Follow in order. Don't skip phases; confirm each output before proceeding.
 
 ### Phase 1 — Requirements
 
-Collect before touching any tools: (1) Use case — what question does the pipeline answer?
-(2) Geographic scope — what AOI? (3) Industry vertical — who consumes the output?
-If vague, ask. Do not assume.
+Collect before touching any tools: (1) use case / question, (2) AOI,
+(3) industry vertical. If vague, ask. Don't assume.
+Onboard: rephrase the participant's business question in geospatial
+terms before proceeding (rule 2).
 
-### Phase 2 — Data Discovery (MCP-First)
+### Phase 2 — Data Discovery (MCP-first)
 
-Use the MCP's discovery tools to ground the pipeline in real, available data. The MCP pushes
-the recommended order (`docs → catalogs → tables → describe_table`) via its tool descriptions;
-follow it.
+Use the MCP's discovery tools to ground the pipeline in real, available
+data. The MCP's tool descriptions push the right order — follow them.
 
-**Critical, and not enforced by the MCP:**
-- Always `describe_table` before designing. Do NOT assume schemas from documentation or
-  dataset names.
-- For raster tables, check band distributions (`SELECT DISTINCT band FROM ...`) and sample
-  `RS_Metadata(raster)` to confirm the source CRS and pixel scale.
-- Confirm the CRS of every raster source before picking spatial operations (see CRS gotchas
-  below).
+Non-obvious and not enforced by the MCP:
 
-Present discovered datasets to user. Wait for confirmation.
+- `describe_table` every source before designing. Do not assume schemas from
+  documentation or dataset names.
+- For rasters: sample `RS_Metadata(raster)` to confirm source CRS and pixel
+  scale. Check band distributions via `SELECT DISTINCT band FROM ...`.
+- `generate_spatial_query_tool` and `execute_query_tool` are useful for
+  ad-hoc exploration SELECTs during discovery; for notebook cells,
+  generate SQL directly using the rules in this skill.
+
+Onboard: name each dataset + explain its rows + include a row count so
+the participant feels the scale (rules 1, 2, 4). Present discovered
+datasets to the user. Wait for confirmation.
 
 ### Phase 3 — Pipeline Design
 
-Read `./references/medallion-spec.md` for layer contracts and the spatial operation selection guide.
+Read `./references/medallion-spec.md`. Produce: ASCII pipeline diagram,
+table inventory with catalog paths and schemas, notebook plan with
+execution order, spatial-operation plan, Gold-scoring design (per-industry
+source metrics, weights, derived metrics — see `./references/gold-scoring.md`).
 
-Produce a design document: (1) ASCII pipeline diagram, (2) table inventory with catalog paths
-and schemas, (3) notebook plan with execution order, (4) spatial operation plan, (5) Gold
-scoring design with per-industry source metrics, proposed weights, and derived metrics.
-Present to user. Wait for approval.
+Onboard: any design choice with more than one valid answer (weights,
+source metrics, windows, derived metrics) is presented as **options
+with tradeoffs**, not a pre-made decision (rule 5). Wait for approval.
 
 ### Phase 4 — Generate Documentation
 
-From the approved design, produce `architecture.md` (pipeline diagram, component descriptions,
-data flow) and `data_dictionary.md` (every table, every column, types, descriptions). These
-serve as the attendee's reference while notebooks are generated.
+Produce `architecture.md` and `data_dictionary.md` alongside the generated
+notebooks under `custom-pipelines/<name>/`. These are the participant's
+reference while notebooks are generated and run.
 
 ### Phase 5 — Generate Notebooks
 
-Generate `raw-to-bronze.ipynb`, `bronze-to-silver.ipynb`, `silver-to-gold.ipynb` following the
-layer contracts in medallion-spec.md. For each SQL-heavy cell, call `generate_spatial_query_tool`
-using one of the reusable prompt templates in **Prompts to pass to `generate_spatial_query_tool`**
-below — the templates embed the Wherobots-specific requirements that the MCP's generation
-prompt does not inject on its own. After each notebook, audit against the gotchas table below.
+Generate `raw-to-bronze.ipynb` (if needed), `bronze-to-silver.ipynb`,
+`silver-to-gold.ipynb` following the layer contracts in medallion-spec.md.
+Write notebook-cell SQL directly — don't round-trip every query through
+`generate_spatial_query_tool`. After each notebook, audit against the
+gotchas table below.
+
+Onboard: every code cell gets a markdown cell above it explaining the
+op in plain English + stating the scale (rows in, rows out, expected
+runtime). Every write is followed by a `COUNT(*)` + `LIMIT 5` so the
+participant sees the artifact (rules 3, 4, 6).
 
 ### Phase 6 — Verification & Reconciliation
 
-Use MCP `execute_query` to verify every table (`COUNT(*)` + `LIMIT 5`). If notebook generation
-changed any table names or columns from the original design, update the docs to match.
-Present summary to user.
+Use `execute_query_tool` to verify every table (`COUNT(*)` + `LIMIT 5`).
+If notebook generation drifted from the original design (renamed tables,
+dropped columns), update the docs to match.
+
+Onboard: the summary shows row counts per table next to what the design
+promised, so the participant can see the design-to-data contract held
+(rule 6).
 
 ---
 
-## Gold Scoring Process
-
-### 5-Step Framework
+## Gold scoring framework
 
 Applied in Gold for each industry:
 
-1. **Select** — Choose industry-specific source metrics for each hazard factor (see below)
-2. **Normalize** — Min-max to [0,1], clamp, NULL→0, handle min==max. Normalize the
-   *superset* of all source columns used across industries in one pass, producing `norm_*` columns.
-3. **Weight** — Per-industry factor weights, must sum to 1.0.
-4. **Classify** — Quantile-based tiers via `percent_rank()` (see tier scheme below).
-5. **Derive** — Industry-specific business metrics.
+1. **Select** — pick industry-specific source metrics per hazard factor
+   (see `./references/gold-scoring.md` for the full aspect-column table).
+2. **Normalize** — min-max to [0,1], clamp, NULL→0, handle `min==max`.
+   Normalize the *superset* of source columns used across industries in
+   one pass, producing `norm_*` columns.
+3. **Weight** — per-industry factor weights must sum to exactly 1.0.
+4. **Classify** — **quantile-based** tiers via `percent_rank()`. Do NOT
+   use fixed score thresholds (e.g., `score >= 0.8`) — with right-skewed
+   hazard data they produce extreme imbalance. Full code example in
+   `./references/gold-scoring.md`.
+5. **Derive** — industry-specific business metrics (2–4 per industry).
 
-Scoring is AOI-relative — NOT comparable across different AOIs.
+Scoring is AOI-relative — not comparable across AOIs.
 
-### Per-Industry Source Metrics (Critical for Differentiation)
+**Different industries must use different source columns** (not just
+different weights). Same 3 columns × different weights produces nearly
+identical tier distributions — visually useless. See `gold-scoring.md`
+for the `INDUSTRY_FACTORS` pattern.
 
-**Problem**: If all industries normalize the same 3 columns and only change weights, the rank
-ordering barely changes → all industries get nearly identical tier distributions on the map.
-
-**Solution**: Each industry must use different raw source columns for its hazard factors. This
-produces genuinely different rank orderings and visually distinct maps.
-
-When designing a pipeline, map each industry to the *aspect* of each hazard that matters most:
-
-| Aspect | Example Column | Best For |
-|--------|----------------|----------|
-| Average risk | `burn_prob_mean` | Insurance (claim frequency), CapMarkets (portfolio risk) |
-| Worst-case risk | `burn_prob_max` | CRE (go/no-go screening) |
-| Intensity | `flame_length_mean` | Energy (ignition risk) |
-| Duration | `flood_duration_days` | Insurance (sustained claims exposure) |
-| Peak severity | `flood_max_wtr_class` | CRE (deal-breaker threshold) |
-| Frequency | `flood_event_count` | CapMarkets, Energy (recurrence) |
-| Broad area count | `event_count_25km` | Insurance (wide-area exposure) |
-| Local intensity | `event_count_5km` | Energy (at-the-asset impacts) |
-| Proximity | inverse distance to nearest event | CRE (nearby = deal-breaker) |
-| Peak event severity | `max_hail_sevprob` | CapMarkets (supply chain disruption) |
-
-Store the mapping in an `INDUSTRY_FACTORS` dict in the config cell:
-```python
-INDUSTRY_FACTORS = {
-    "insurance": {
-        "wildfire_factor": "burn_prob_mean",
-        "flood_factor":    "flood_duration_days",
-        "severe_weather_factor": "event_count_25km",
-    },
-    # ... different columns for each industry
-}
-```
-
-Use a helper function (e.g., `add_industry_factors()`) to map each industry's `norm_*` columns
-→ `wildfire_factor`, `flood_factor`, `severe_weather_factor`, `risk_score`.
-
-### Quantile-Based Risk Tiers
-
-**Do NOT use fixed score thresholds** (e.g., Critical≥0.80). With right-skewed hazard data,
-fixed thresholds produce extreme imbalance (e.g., 882K low, 65 critical) making maps useless.
-
-Use `percent_rank()` over `risk_score` to cut tiers by percentile:
-
-```python
-RISK_PERCENTILES = {
-    "critical": 0.95,   # top 5%
-    "high":     0.80,   # 80th–95th percentile
-    "elevated": 0.50,   # 50th–80th percentile
-    "moderate": 0.20,   # 20th–50th percentile
-    "low":      0.00,   # bottom 20%
-}
-
-def classify_risk_tier(score_col: str) -> F.Column:
-    pct = F.percent_rank().over(Window.orderBy(F.col(score_col).asc()))
-    return (
-        F.when(pct >= RISK_PERCENTILES["critical"], F.lit("critical"))
-         .when(pct >= RISK_PERCENTILES["high"],     F.lit("high"))
-         .when(pct >= RISK_PERCENTILES["elevated"], F.lit("elevated"))
-         .when(pct >= RISK_PERCENTILES["moderate"], F.lit("moderate"))
-         .otherwise(F.lit("low"))
-    )
-```
-
-This guarantees a visually balanced map (~5/15/30/30/20 split) regardless of score skew.
-Combined with per-industry source metrics, each industry will have genuinely different tier
-assignments despite using the same percentile cuts.
-
-### Designing Factors for a New Industry
-
-1. Identify the industry's primary decision (underwrite, acquire, divest, harden)
-2. For each hazard, ask: "Which *aspect* drives that decision?" (severity? duration? proximity? frequency?)
-3. Choose the raw column that best captures that aspect
-4. Rank hazards by impact → assign weights (most impactful: 0.35–0.50, sum to 1.0)
-5. Select 2–4 derived metrics specific to the industry
-6. Document rationale → propose to user → wait for confirmation
-
-### Score Explanation JSON
-
-Include source column names in the `score_explanation` JSON so downstream consumers know
-exactly which metrics drove the score:
-```python
-F.lit(factors["wildfire_factor"]).alias("source_wildfire"),
-F.lit(factors["flood_factor"]).alias("source_flood"),
-F.lit(factors["severe_weather_factor"]).alias("source_severe_weather"),
-```
+**Score explanation JSON**: every Gold row carries a `score_explanation`
+STRING column with factor values, weights, AND source column names — so
+downstream consumers (Felt, psycopg2 queries) can tell which raw column
+drove each factor. See `gold-scoring.md` for the `to_json(struct(...))`
+pattern.
 
 ---
 
-## RS_ZonalStats Signatures (Critical)
+## Non-obvious rules that apply on every generation
 
-The function signature changes based on whether you need band selection and allTouched:
-
-| Form | Signature | When to Use |
-|------|-----------|-------------|
-| 3-arg (single-band) | `RS_ZonalStats(raster, geometry, 'mean')` | Single-band rasters (e.g., wildfire burn probability) |
-| 5-arg (multi-band + allTouched) | `RS_ZonalStats(raster, geometry, 1, 'max', true)` | Multi-band rasters with band selection; `true` = allTouched/excludeNoData |
-
-**Traps**:
-- Do NOT add `true` as a 4th arg to the 3-arg form. Sedona will interpret the stat name as a
-  band index and fail with a confusing error.
-- For sub-pixel features (building footprints < 30m pixel), use the 5-arg form with
-  `allTouched=true` instead of buffering the geometry. This is faster and avoids the full
-  shuffle that `ST_Buffer` requires.
-
----
-
-## Flood Data: OPERA DSWx-S1
-
-When using OPERA DSWx-S1 for flood data (`org_catalog.opera.dswx_s1`):
-
-- **Band B01_WTR** is the primary water classification band. Sufficient for most use cases.
-  Using all 4 bands (B01_WTR, B02_BWTR, B03_CONF, B04_DIAG) is 4× slower with
-  marginal improvement — only use all bands if the user specifically requests confidence weighting.
-- **CRS is EPSG:32611** (UTM Zone 11N for San Diego). Verify CRS via MCP for other AOIs.
-- **Temporal filtering**: Filter by `acq_date BETWEEN start AND end` and `band = 'B01_WTR'`.
-- **Weekly granularity**: Use `DATE_TRUNC('week', acq_date)` to aggregate into weekly bins
-  in Silver. This reduces row count while preserving temporal signal.
-
-### Week-by-Week Iceberg Append (Shuffle Reduction)
-
-For large flood datasets, processing all weeks at once causes excessive Spark shuffle
-(buildings × all tiles). Instead, iterate one week at a time:
-
-```python
-for i, (week_start, week_end) in enumerate(week_boundaries):
-    week_df = ...  # filter flood tiles to this week, join + zonal stats
-    if i == 0:
-        week_df.writeTo(TABLE).createOrReplace()
-    else:
-        week_df.writeTo(TABLE).append()
-```
-
-This caps shuffle at buildings × 1 week of tiles per iteration.
-
-### Flood Metrics Available After Aggregation
-
-The weekly flood table produces these per-asset aggregates for Gold:
-- `flood_event_count` — count of weeks with WTR ≥ 1 (frequency)
-- `flood_duration_days` — days between first and last flood week (duration)
-- `flood_max_wtr_class` — peak WTR classification across all weeks (severity)
-
-Different industries should use different flood metrics (see Per-Industry Source Metrics above).
-
----
-
-## Silver: Deferred Joins for Weekly Data
-
-When a Silver source has temporal granularity (e.g., weekly flood rows), do NOT join it into
-`asset_enriched` — this would fan out the 1:1 enriched table into N rows per asset, breaking
-downstream assumptions.
-
-Instead:
-1. Write the weekly data to its own Silver Iceberg table (e.g., `asset_flood_exposure`)
-2. The `asset_enriched` table contains only 1:1 data (wildfire + weather)
-3. Gold loads the weekly table separately, aggregates to per-asset, then LEFT JOINs
-
-This preserves the enriched table's 1:1 guarantee while keeping weekly granularity available.
-
----
-
-## Temporal Window Configuration
-
-Use separate temporal windows for each data source — they rarely share the same observation period:
-
-```python
-FLOOD_WINDOW_START   = "2025-12-01"
-FLOOD_WINDOW_END     = "2026-03-31"
-WEATHER_WINDOW_START = "2025-01-01"
-WEATHER_WINDOW_END   = "2026-03-25"
-```
-
-**Trap**: Never use a single `WINDOW_START`/`WINDOW_END` for all sources. Flood data may cover
-a 4-month event window while weather data covers 15 months. A single window will silently
-produce empty results for one source.
-
----
-
-## Prompts to pass to `generate_spatial_query_tool`
-
-The MCP's generation prompt injects relevant documentation but does NOT inject Wherobots
-idioms (`.writeTo()`, `sedona.sql`), CRS rules (`use_sphere=TRUE`), or scoring framework
-(`percent_rank()`, `INDUSTRY_FACTORS`). Embed them in the natural-language prompt you pass.
-
-Templates below are starting points. Substitute `{bracketed}` fields.
-
-### Bronze — CSV → Iceberg
-
-> Generate Sedona SQL that ingests `{s3_csv_path}` into Iceberg table `{target_table}`.
-> Columns: `{col_list}`. Parse `{timestamp_col}` via `to_timestamp('yyyyMMddHHmmss')`.
-> Cast `{numeric_cols}` to double. Build a geometry via `ST_Point(CAST(LON AS DOUBLE),
-> CAST(LAT AS DOUBLE))` (x=lon, y=lat), then drop LON and LAT. Use `sedona.read` (not
-> `spark.read`). Materialize via `df.writeTo("{target_table}").createOrReplace()`.
-
-### Bronze — raster ingest
-
-> Generate Sedona SQL that ingests `{s3_geotiff_path}` into Iceberg table `{target_table}`.
-> Use `sedona.read.format("raster").option("tileWidth", 128).option("tileHeight", 128)`.
-> Rename the `rast` column to `raster`. Compute `geometry = RS_Envelope(raster)`. Add a
-> `crs` STRING column with the source CRS (e.g., 'EPSG:32611' for OPERA, 'EPSG:5070' for
-> USFS CONUS rasters). Do NOT call `RS_SetSRID` — Sedona auto-detects CRS from the GeoTIFF
-> metadata. Materialize via `df.writeTo("{target_table}").createOrReplace()`.
-
-### Silver — zonal statistics (raster → vector)
-
-> Generate Sedona SQL that joins `{raster_table}` to `{buildings_table}` (filtered to the
-> AOI polygon) via `RS_Intersects(raster, geometry)` — raster first. For each building,
-> compute `RS_ZonalStats(raster, geometry, 'mean')` and `RS_ZonalStats(raster, geometry,
-> 'max')`. `GROUP BY asset_id, geometry` because assets can span multiple raster tiles.
-> `RS_ZonalStats` and `RS_Intersects` auto-reproject across CRSs in Sedona 0.12+ — no
-> manual `ST_Transform` needed. If features are smaller than the raster pixel, use the
-> 5-arg form `RS_ZonalStats(raster, geometry, 1, 'max', true)` with `allTouched=true`
-> instead of buffering. Do NOT add a 4th arg to the 3-arg form.
-
-### Silver — KNN event density (vector → vector)
-
-> Generate Sedona SQL for a KNN spatial join between `{buildings}` (EPSG:4326) and
-> `{events_table}` (EPSG:4326 points). Use
-> `ST_KNN(b.geometry, e.geometry, 10, TRUE, 25000)` — `use_sphere=TRUE` is **mandatory**
-> for lat/lon inputs; without it, the 25000 radius is interpreted in degrees and results
-> are meaningless. Use `ST_DistanceSpheroid` (not `ST_Distance`) for the distance column
-> so it returns meters. Filter events to `ZTIME BETWEEN {WEATHER_WINDOW_START} AND
-> {WEATHER_WINDOW_END}`. Aggregate to one row per asset.
-
-### Silver — one week of flood (wrap in a Python for-loop in the notebook)
-
-> Generate Sedona SQL for ONE ISO week of flood. Filter `org_catalog.opera.dswx_s1` to
-> `acq_date BETWEEN DATE('{week_start}') AND DATE('{week_end}')` and `band = 'B01_WTR'`.
-> Join to `{buildings}` via `RS_Intersects(raster, geometry)`, compute
-> `MAX(RS_ZonalStats(raster, geometry, 1, 'max', true))` per asset with `allTouched=true`.
-> Emit one `DATE('{week_start}') AS flood_week` column. Return a single SELECT. The
-> notebook wraps this query in a for-loop over week boundaries: first iteration
-> `.writeTo(FLOOD_SILVER).createOrReplace()`, subsequent iterations `.append()`.
-
-### Gold — industry-specific scoring
-
-> Generate Sedona SQL that scores `{enriched_table}` for industry `{industry}` using
-> `INDUSTRY_FACTORS['{industry}']` to pick source columns (do NOT reuse the same 3 columns
-> across industries). Normalize each chosen source column via min-max to [0,1], treating
-> NULL as 0. Compute
-> `risk_score = norm_wildfire_factor * {w_wf} + norm_flood_factor * {w_fl} + norm_severe_weather_factor * {w_sw}`
-> where the three weights sum to 1.0. Classify `risk_tier` via
-> `percent_rank()` over `risk_score` ordered ascending, cut at percentiles 0.95 (critical),
-> 0.80 (high), 0.50 (elevated), 0.20 (moderate), else low — do NOT use fixed score
-> thresholds like `score >= 0.80`. Emit a `score_explanation` JSON column with the source
-> column names (`source_wildfire`, `source_flood`, `source_severe_weather`) and weights.
-
-### After the MCP returns
-
-Audit the returned SQL for the anti-patterns below before putting it in a notebook cell.
-The MCP occasionally emits `.write.format("iceberg")` or `spark.sql(...)` despite the
-prompt; translate to `.writeTo().createOrReplace()` and `sedona.sql(...)` respectively.
-
----
-
-## Sedona / Wherobots Gotchas
-
-These are the mistakes LLMs consistently make. Use `search_documentation` MCP tool for general
-API reference; this section covers only the non-obvious traps.
+Use `search_documentation` MCP tool for general API reference; this
+table covers only the non-obvious traps LLMs consistently hit.
 
 | Rule | Wrong | Right |
 |------|-------|-------|
 | Session variable | `spark.read`, `spark.sql` | `sedona.read`, `sedona.sql` (after `SedonaContext.create()`) |
 | Point arg order | `ST_Point(lat, lon)` | `ST_Point(lon, lat)` — X, Y |
 | Geodesic distance | `ST_Distance` (returns degrees) | `ST_DistanceSpheroid` (returns meters) |
-| KNN on EPSG:4326 points | `ST_KNN(a.geom, b.geom, k, FALSE, radius)` | `ST_KNN(a.geom, b.geom, k, TRUE, radius_m)` — **`use_sphere=TRUE` is mandatory** for lat/lon data; without it, `radius` is in degrees and results are meaningless |
-| Raster CRS | `RS_SetSRID(raster, 4326)` regardless of source | Sedona auto-detects CRS from GeoTIFF metadata. Document source CRS in a `crs` STRING column. Only call `RS_SetSRID` when the source truly lacks an embedded SRID (rare). |
-| Cross-CRS raster↔vector ops | Manual `ST_Transform` to match raster and vector CRS | `RS_ZonalStats` / `RS_Intersects` auto-reproject in Sedona 0.12+ — no manual transform needed if both sides have a known CRS |
+| KNN on EPSG:4326 points | `ST_KNN(a.geom, b.geom, k, FALSE, radius)` | `ST_KNN(a.geom, b.geom, k, TRUE, radius_m)` — **`use_sphere=TRUE` is mandatory** for lat/lon; without it `radius` is in degrees and results are meaningless |
+| Raster CRS | `RS_SetSRID(raster, 4326)` regardless of source | Sedona auto-detects CRS from GeoTIFF metadata. Document source CRS in a `crs` STRING column. Only call `RS_SetSRID` when source truly lacks embedded CRS (rare). |
+| Cross-CRS raster↔vector ops | Manual `ST_Transform` to match CRSs | `RS_ZonalStats` / `RS_Intersects` auto-reproject in Sedona 0.12+ — no manual transform needed if both sides have a known CRS |
 | Raster intersection | `RS_Intersects(geometry, raster)` | `RS_Intersects(raster, geometry)` — raster first |
 | Zonal stats 3-arg | `RS_ZonalStats(raster, geom, 'mean', true)` | `RS_ZonalStats(raster, geom, 'mean')` — no 4th arg for single-band |
 | Zonal stats 5-arg | `RS_ZonalStats(raster, geom, 'max')` for multi-band | `RS_ZonalStats(raster, geom, 1, 'max', true)` — band index + allTouched |
 | Zonal stats aggregation | No GROUP BY → duplicate rows | `GROUP BY asset_id, geometry` (assets span tiles) |
 | Sub-pixel footprints | `ST_Buffer(geometry, 30)` then zonal stats | Use `allTouched=true` (5th arg) — faster, no extra shuffle |
 | Iceberg write | `df.write.format("iceberg").save()` | `df.writeTo("...").createOrReplace()` |
-| Iceberg append | `df.writeTo("...").createOrReplace()` in loop | First iteration: `.createOrReplace()`, subsequent: `.append()` |
+| Iceberg append in loop | `.createOrReplace()` each iteration (destroys previous) | First iteration `.createOrReplace()`, subsequent `.append()` |
 | Iceberg read | `sedona.read.format("iceberg").load()` | `sedona.table("catalog.db.table")` |
-| S3 anon creds | Global anonymous provider | Per-bucket: `fs.s3a.bucket.<NAME>.aws.credentials.provider` |
+| S3 anonymous creds | Global anonymous provider | Per-bucket: `fs.s3a.bucket.<NAME>.aws.credentials.provider` |
 | Missing data | `df.fillna(0)` | Keep NULLs + `has_<source>_data` flags |
-| Snapshot cleanup | None after createOrReplace | `expire_snapshots(retain_last => 1)` |
-| Weekly data in enriched | LEFT JOIN weekly rows onto enriched | Keep weekly table separate; aggregate in Gold before joining |
+| Snapshot cleanup | None after `createOrReplace` | `expire_snapshots(retain_last => 1)` |
+| Weekly/temporal in enriched | LEFT JOIN weekly rows onto asset_enriched | Keep weekly table separate; aggregate in Gold before joining |
 | Same factors all industries | Same 3 source columns, different weights | Different source columns per industry via `INDUSTRY_FACTORS` |
 | Fixed tier thresholds | `Critical≥0.80, High≥0.60` | `percent_rank()` with percentile cuts — immune to score skew |
 | Temporal windows | Single `WINDOW_START/END` for all sources | Per-source windows: `FLOOD_WINDOW_*`, `WEATHER_WINDOW_*` |
-| Config cell edits | Partial updates that truncate existing vars | Always verify ALL config variables survive after editing |
+| Config cell edits | Partial updates that truncate existing vars | Always read the full cell, preserve every variable |
 
 ---
 
-## Notebook Conventions
+## Notebook conventions
 
 | Role | Type | Rule |
 |------|------|------|
@@ -432,14 +306,15 @@ API reference; this section covers only the non-obvious traps.
 
 **New cell?** Different source → new section. Same source, different op → new cell.
 **Temp view or Iceberg?** Within one notebook → temp view. Crosses notebooks → Iceberg.
-**AOI filter at Bronze or Silver?** Silver. Broad regional filter at Bronze only if full extent is impractical.
+**AOI filter at Bronze or Silver?** Silver. Bronze only if the full extent is impractical.
 
-**Config cell safety**: When editing the config cell, always read the full cell first and
-verify that ALL existing variables (SCORING_WEIGHTS, RISK_PERCENTILES, INDUSTRY_FACTORS,
-CRE_SCREEN_THRESHOLD, AURORA_SCHEMA, etc.) are preserved. Partial updates that truncate
-the cell are a common failure mode.
+**Config cell safety**: when editing the config cell, always read the full
+cell first and verify that ALL existing variables (`SCORING_WEIGHTS`,
+`RISK_PERCENTILES`, `INDUSTRY_FACTORS`, `AURORA_SCHEMA`, etc.) survive.
+Partial edits that truncate the cell are a common failure mode.
 
-### ipynb Format
+### ipynb format
 
-Valid JSON: `nbformat: 4`, `nbformat_minor: 5`. Each source line ends with `\n`.
-Code cells: `"outputs": [], "execution_count": null`. Markdown cells: no outputs field.
+Valid JSON: `nbformat: 4`, `nbformat_minor: 5`. Each source line ends
+with `\n`. Code cells: `"outputs": [], "execution_count": null`. Markdown
+cells: no outputs field.
