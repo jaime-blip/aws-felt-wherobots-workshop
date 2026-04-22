@@ -1,20 +1,20 @@
 # Webinar Demo Script — Insurance Risk Assessment
 
-**Persona:** You are a **Risk Analytics Lead** at a property insurance company. Your team underwrites policies across San Diego County. After the devastating 2003 Cedar Fire and 2007 Witch Creek Fire, your company needs to reassess wildfire exposure for 358K insured properties. You have satellite imagery, NOAA weather events, and flood data — but it's all raw. You need to turn it into actionable risk scores.
+**Persona:** You are a **Risk Analytics Lead** at a property insurance company. Your team underwrites policies across San Diego County. After the devastating 2003 Cedar Fire and 2007 Witch Creek Fire, your company needs to reassess wildfire exposure for 1M insured properties. You have satellite imagery, NOAA weather events, and flood data — but it's all raw. You need to turn it into actionable risk scores.
 
 ---
 
 ## Query 1: Wherobots — Large-Scale Raster + Vector Join (Part 1)
 
-**What you're showing:** Processing 358K building footprints against burn probability raster data at scale. This is the heavy-duty OLAP operation that PostGIS can't do efficiently.
+**What you're showing:** Processing 1M building footprints against burn probability raster data at scale. This is the heavy-duty OLAP operation that PostGIS can't do efficiently.
 
-**Narrative:** *"First, we need to score every building in San Diego for wildfire risk. We have satellite-derived burn probability data from the US Forest Service — this is a 32GB raster covering the entire continental US. We need to extract the burn probability value at every building footprint. That's a zonal statistics operation across 358K polygons against high-res raster tiles."*
+**Narrative:** *"First, we need to score every building in San Diego for wildfire risk. We have satellite-derived burn probability data from the US Forest Service — this is a 32GB raster covering the entire continental US. We need to extract the burn probability value at every building footprint. That's a zonal statistics operation across 1M polygons against high-res raster tiles."*
 
 **In Wherobots MCP (Kiro), say:**
 
 > "Run zonal statistics on the San Diego buildings against the USFS burn probability raster. For each building, extract the mean burn probability from the underlying raster tiles."
 
-**What happens:** Wherobots runs `RS_ZonalStats` on Apache Sedona — joins 358K Overture building polygons with ~500 burn probability raster tiles. This is where Wherobots shines: raster-vector joins at scale that would take hours in PostGIS take minutes on distributed Sedona.
+**What happens:** Wherobots runs `RS_ZonalStats` on Apache Sedona — joins 1M Overture building polygons with ~500 burn probability raster tiles. This is where Wherobots shines: raster-vector joins at scale that would take hours in PostGIS take minutes on distributed Sedona.
 
 **Talking point:** *"This is exactly the kind of operation where PostGIS hits a wall. PostGIS is brilliant for transactional queries — give me buildings within 5km of this point. But when you need to join a raster dataset with hundreds of thousands of polygons, you need a distributed processing engine. That's Wherobots."*
 
@@ -107,7 +107,7 @@ ORDER BY avg_score DESC;
 
 | # | What | Where | Why |
 |---|------|-------|-----|
-| 1 | Raster-vector join: 358K buildings × burn probability tiles | **Wherobots** (Sedona) | Large-scale OLAP spatial processing |
+| 1 | Raster-vector join: 1M buildings × burn probability tiles | **Wherobots** (Sedona) | Large-scale OLAP spatial processing |
 | 2 | Spatial buffer + filter: "Show me risky buildings near Poway" | **Aurora PostGIS** | Transactional OLTP spatial queries |
 | 3 | Generate interactive risk map for the team | **Felt** (via AI agent) | Collaborative visualization + sharing |
 
