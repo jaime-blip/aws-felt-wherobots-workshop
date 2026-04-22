@@ -1,40 +1,64 @@
 # Webinar Demo Script — Insurance Risk Assessment
 
-**Persona:** You are a **Risk Analytics Lead** at a property insurance company. Your team underwrites policies across San Diego County. After the devastating 2003 Cedar Fire and 2007 Witch Creek Fire, your company needs to reassess wildfire exposure for 1M insured properties. You have satellite imagery, NOAA weather events, and flood data — but it's all raw. You need to turn it into actionable risk scores.
+**Persona:** You are a **Risk Analytics Lead** at a property insurance company. Your team underwrites policies across San Diego County. It's been a devastating start to 2026: on New Year's Day, an atmospheric river dumped 2.5 inches of rain in 48 hours, overflowing the San Diego River, forcing 10+ water rescues in Mission Valley, and breaking rainfall records from Poway to El Cajon. Then in March, another round of flooding hit — we captured satellite flood extent data from March 5-11 using NASA's OPERA system. On March 3, FEMA updated the official flood maps for San Diego, Santee, Poway, and El Cajon. Your job: reassess flood AND wildfire exposure for 1M insured properties, using real 2026 satellite data.
+
+---
+
+## The Hook (30 seconds)
+
+*"Six weeks ago, San Diego flooded. FEMA just redrew the flood maps. And we're heading into wildfire season with the same dry brush that fueled the Cedar and Witch Creek fires. Our question today: for 1 million insured buildings, which ones are actually at risk — and can we answer that question in under 90 minutes, from raw satellite data to an interactive risk map?"*
 
 ---
 
 ## Query 1: Wherobots — Large-Scale Raster + Vector Join (Part 1)
 
-**What you're showing:** Processing 1M building footprints against burn probability raster data at scale. This is the heavy-duty OLAP operation that PostGIS can't do efficiently.
+**What you're showing:** Processing 1M building footprints against burn probability raster data AND real 2026 flood satellite imagery at scale.
 
-**Narrative:** *"First, we need to score every building in San Diego for wildfire risk. We have satellite-derived burn probability data from the US Forest Service — this is a 32GB raster covering the entire continental US. We need to extract the burn probability value at every building footprint. That's a zonal statistics operation across 1M polygons against high-res raster tiles."*
+**Narrative:** *"We have three types of satellite data we need to join with our building footprints. First: US Forest Service burn probability — a 32GB raster covering the entire continental US. Second: NASA OPERA flood extent imagery from the March 2026 San Diego flooding — actual satellite captures showing which areas were underwater. Third: NOAA severe weather events — hail, mesocyclone, tornado vortex signatures. We need to extract values from all of these at every one of our 1 million building polygons. That's a zonal statistics operation at massive scale."*
 
 **In Wherobots MCP (Kiro), say:**
 
-> "Run zonal statistics on the San Diego buildings against the USFS burn probability raster. For each building, extract the mean burn probability from the underlying raster tiles."
+> "Run zonal statistics on the San Diego buildings against the USFS burn probability raster and the March 2026 OPERA flood extent tiles. For each building, extract the mean burn probability and the maximum flood extent across the March 5-11 observation window."
 
-**What happens:** Wherobots runs `RS_ZonalStats` on Apache Sedona — joins 1M Overture building polygons with ~500 burn probability raster tiles. This is where Wherobots shines: raster-vector joins at scale that would take hours in PostGIS take minutes on distributed Sedona.
+**What happens:** Wherobots runs `RS_ZonalStats` on Apache Sedona — joins 1M Overture building polygons with ~500 burn probability raster tiles AND 7 days of flood rasters. This is where Wherobots shines: raster-vector joins at scale that would take hours in PostGIS take minutes on distributed Sedona.
 
-**Talking point:** *"This is exactly the kind of operation where PostGIS hits a wall. PostGIS is brilliant for transactional queries — give me buildings within 5km of this point. But when you need to join a raster dataset with hundreds of thousands of polygons, you need a distributed processing engine. That's Wherobots."*
+**Talking point:** *"This is real satellite data from 6 weeks ago. Not a hypothetical. These flood tiles show us which neighborhoods were actually underwater during the March storms. And the burn probability data shows us which areas are primed for the next wildfire. PostGIS is amazing for transactional spatial queries, but when you need to join raster imagery with a million polygons, you need a distributed processing engine. That's Wherobots."*
 
 ---
 
-## Query 2: PostGIS on Aurora — Spatial Analysis for the Underwriter
+## Query 2: PostGIS on Aurora — The Underwriter's Questions
 
 **What you're showing:** Now that the scored data is in Aurora, an underwriter asks real business questions using PostGIS spatial functions.
 
-**Narrative:** *"Great — our data engineers have processed the satellite data and scored every building. The Gold tables are in Aurora PostgreSQL with PostGIS. Now I'm the underwriter. I just got a new batch of policy applications from the Poway area — right at the wildland-urban interface where the Witch Creek Fire burned. I need to assess the risk."*
+**Narrative:** *"OK — our data engineers have processed the satellite data and scored every building. The Gold tables are in Aurora PostgreSQL with PostGIS. Now I'm the underwriter. I just got two urgent requests. First: which buildings in our portfolio were actually in the flood zone during the March event? Second: Poway just had its flood maps redrawn by FEMA — I need to reassess wildfire exposure for every policy in that area before renewal season."*
 
-**Query to run (or prompt the agent with):**
+**Query 2a — Flood exposure from the March 2026 event:**
 
 ```sql
--- "Which of my insured buildings near Poway have elevated wildfire exposure?"
+-- "Which insured buildings had actual flood exposure in March 2026?"
+SELECT 
+    risk_tier,
+    COUNT(*) AS buildings,
+    ROUND(AVG(flood_factor)::numeric, 3) AS avg_flood,
+    ROUND(MAX(flood_factor)::numeric, 3) AS max_flood,
+    ROUND(AVG(risk_score)::numeric, 3) AS avg_overall_risk
+FROM workshop.insurance_exposure
+WHERE flood_factor > 0.1
+GROUP BY risk_tier
+ORDER BY avg_flood DESC;
+```
+
+**Talking point:** *"See that one building scoring 'high'? flood_factor of 1.0 — it was directly in the flood path. But the real story is the 'moderate' tier: thousands of buildings that most people wouldn't consider flood-prone, but our satellite data says otherwise. This is why zip code averages don't work for insurance — you need building-level precision."*
+
+**Query 2b — Spatial buffer around Poway's wildfire zone:**
+
+```sql
+-- "Show me the wildfire-exposed buildings near Poway"
 SELECT 
     asset_id,
     ROUND(risk_score::numeric, 3) AS risk_score,
-    ROUND(wildfire_factor::numeric, 3) AS wildfire_factor,
-    ROUND(flood_factor::numeric, 3) AS flood_factor,
+    ROUND(wildfire_factor::numeric, 3) AS wildfire,
+    ROUND(flood_factor::numeric, 3) AS flood,
     risk_tier,
     ST_AsText(ST_Centroid(geometry)) AS location
 FROM workshop.insurance_exposure
@@ -48,67 +72,36 @@ ORDER BY wildfire_factor DESC
 LIMIT 20;
 ```
 
-**What this shows:**
-- `ST_DWithin` — spatial buffer around Poway (5km radius)
-- Filtering by `wildfire_factor > 0.3` — buildings with meaningful fire exposure
-- The results show the wildland-urban interface buildings where fire risk is concentrated
-
-**Talking point:** *"See how some buildings have a wildfire factor of 0.96 while their neighbor is at 0.01? That's because the burn probability raster has high resolution — one building sits on dry chaparral, the other is shielded by a ridge. This is real satellite-derived data, not a zip code average. That's the difference between 'this zip code has fire risk' and 'THIS building has fire risk.'"*
-
-**Bonus spatial query — portfolio exposure summary:**
-
-```sql
--- "What's my total exposure by risk tier within 10km of the Poway fire zone?"
-SELECT 
-    risk_tier,
-    COUNT(*) AS buildings,
-    ROUND(AVG(risk_score)::numeric, 3) AS avg_score,
-    ROUND(AVG(wildfire_factor)::numeric, 3) AS avg_wildfire,
-    ROUND(MAX(wildfire_factor)::numeric, 3) AS max_wildfire
-FROM workshop.insurance_exposure
-WHERE ST_DWithin(
-    geometry::geography,
-    ST_SetSRID(ST_MakePoint(-117.0417, 32.9628), 4326)::geography,
-    10000  -- 10km
-)
-GROUP BY risk_tier
-ORDER BY avg_score DESC;
-```
+**Talking point:** *"Look at this — buildings with a wildfire factor of 0.96 sitting right next to buildings at 0.01. Same neighborhood, completely different risk profiles. That's because the burn probability raster has 30-meter resolution — one building sits on dry chaparral on a south-facing slope, the other is shielded by a ridge. This is the difference between 'this zip code has fire risk' and 'THIS building has fire risk.' And now with the March floods AND the new FEMA maps, some of these same buildings face compound risk — fire AND flood."*
 
 ---
 
-## Query 3: Felt Map — Visualize the Underwriter's View
+## Query 3: Felt Map — Share with the Team
 
-**What you're showing:** Turn the query results into an interactive map that the whole team can use.
+**What you're showing:** Turn the analysis into an interactive map the whole team can use — no code required.
 
-**Narrative:** *"Now I need to share this with my team — the actuaries, the claims adjusters, the VP. They're not going to run SQL queries. They need a map. Let me ask the AI agent to build one."*
+**Narrative:** *"I need to share this with the team — actuaries, claims adjusters, the VP. They're not going to run SQL. They need a map they can click around in, filter, annotate, and share with our reinsurer. One prompt."*
 
 **Prompt to the Strands agent:**
 
-> "Create a map called 'Poway Wildfire Exposure — Q2 2026 Review'. Add the insurance exposure buildings within 10km of Poway that have wildfire_factor above 0.1. Color them by risk_tier — red for high, orange for elevated, yellow for moderate, green for low. Add the burn probability raster as a background layer."
-
-**Or if running the agent directly:**
-
-```bash
-./run.sh "Build me an insurance risk map focused on the Poway wildfire zone. Show buildings within 10km of Poway colored by risk tier. Use red for high risk, orange for elevated, yellow for moderate."
-```
+> "Create a map called 'San Diego Risk Review — Post-March 2026 Floods'. Add two layers: first, all buildings with flood_factor above 0.1, colored by flood intensity from blue (low) to dark blue (high). Second, all buildings near Poway with wildfire_factor above 0.3, colored red to orange by wildfire severity. Title the layers 'March 2026 Flood Exposure' and 'Poway Wildfire Zone'."
 
 **What this produces:** A shareable Felt map URL with:
-- 8,000+ building polygons around Poway
-- Color-coded by risk tier
-- Hoverable popups showing risk_score, wildfire_factor, flood_factor
-- The 140 elevated-risk buildings clearly visible in the eastern hills
+- Flood-exposed buildings across San Diego (from real March 2026 satellite data)
+- Wildfire-exposed buildings in the Poway zone
+- Hoverable popups showing risk_score, wildfire_factor, flood_factor per building
+- The team can filter, annotate, draw on it, share the URL
 
-**Talking point:** *"This is the full loop. Satellite data → Wherobots processing → Aurora PostGIS → AI agent → interactive map. The underwriter didn't write any code. The data engineer used natural language with the Wherobots MCP. And the whole team can now collaborate on this map in Felt — draw on it, annotate, filter, share with stakeholders."*
+**Talking point:** *"This is the full loop. Satellite data captured 6 weeks ago → Wherobots processing at scale → Aurora PostGIS for underwriter queries → AI agent → interactive map. The underwriter didn't write any code. The data engineer used natural language with the Wherobots MCP. And now the whole team — actuaries, claims, legal — can collaborate on this map in Felt. Draw circles around areas of concern, annotate individual buildings, filter by risk tier, share the link with your reinsurer. Real data, real flood, real decisions."*
 
 ---
 
 ## The 3-Query Flow (Summary for slides)
 
-| # | What | Where | Why |
-|---|------|-------|-----|
-| 1 | Raster-vector join: 1M buildings × burn probability tiles | **Wherobots** (Sedona) | Large-scale OLAP spatial processing |
-| 2 | Spatial buffer + filter: "Show me risky buildings near Poway" | **Aurora PostGIS** | Transactional OLTP spatial queries |
-| 3 | Generate interactive risk map for the team | **Felt** (via AI agent) | Collaborative visualization + sharing |
+| # | What | Where | Why | Data |
+|---|------|-------|-----|------|
+| 1 | Raster-vector join: 1M buildings × burn probability + flood tiles | **Wherobots** (Sedona) | Large-scale OLAP spatial processing | USFS burn probability (32GB) + OPERA flood March 2026 + NOAA weather |
+| 2 | Spatial buffer + filter: "Which buildings flooded? What's at risk near Poway?" | **Aurora PostGIS** | Fast transactional OLTP spatial queries | Scored Gold tables (1M rows × 4 industry verticals) |
+| 3 | Generate interactive risk map for the team | **Felt** (via AI agent) | Collaborative visualization + sharing | Source layers from Aurora, real-time |
 
-**Key message:** Each tool does what it's best at. Wherobots processes at scale. PostGIS serves fast, indexed queries. Felt makes it visual and collaborative. The AI agent ties them together.
+**Key message:** Each tool does what it's best at. Wherobots processes satellite imagery at scale. PostGIS serves fast, indexed spatial queries. Felt makes it visual and collaborative. The AI agent ties them together. And this isn't hypothetical — this is real 2026 flood data from 6 weeks ago.
