@@ -85,7 +85,15 @@ downstream assumptions.
 with one row per asset × week). Gold loads this table separately, aggregates to per-asset,
 then LEFT JOINs the aggregates onto the enriched data.
 
-**Week-by-week Iceberg append** for large temporal datasets:
+**Default — single-pass GROUP BY**. Derive the temporal bucket from the raw timestamp
+column (e.g., `DATE_TRUNC('WEEK', acq_date)` for weekly) inside the SELECT and GROUP BY,
+then write once. At workshop scale (single-county AOI, ~1M assets × 15–20 weeks)
+single-pass is measurably faster than a per-week loop because it avoids N × job-startup
+overhead and N × Iceberg append metadata.
+
+**Fallback — week-by-week append** only when the AOI is state/continent-scale and the
+single GROUP BY shuffle would OOM, or when per-week checkpointing (crash-loses-one-week
+vs. crash-loses-all) matters:
 ```python
 for i, (week_start, week_end) in enumerate(week_boundaries):
     week_df = ...  # filter to this week, join, zonal stats
@@ -94,7 +102,8 @@ for i, (week_start, week_end) in enumerate(week_boundaries):
     else:
         week_df.writeTo(TABLE).append()
 ```
-This caps Spark shuffle at `buildings × 1 week of tiles` per iteration.
+Caps Spark shuffle at `buildings × 1 week of tiles` per iteration but pays a
+per-iteration job-startup cost (~5–10 s × N).
 
 ### What Silver Does NOT Do
 - No normalization to [0, 1] (that's Gold)

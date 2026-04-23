@@ -65,56 +65,60 @@ to ISO weeks so each (asset, week) row is one observation:
 This keeps the temporal signal while cutting row count by roughly 3×
 vs per-acquisition rows.
 
-## Week-by-week Iceberg append loop
+## Writing the weekly Silver table — single SQL pass (default)
 
-For large flood datasets, processing all weeks in one Spark job causes
-excessive shuffle (buildings × all-tiles-in-window). Iterate week by
-week — each iteration processes `buildings × one week of tiles`:
+Default: **one SQL pass** using `DATE_TRUNC('WEEK', acq_date)` to derive
+`flood_week` and a GROUP BY on `(asset, flood_week)`. Spark's
+`DATE_TRUNC('WEEK', …)` returns the Monday (ISO week start), which
+matches the bucketing we want.
 
 ```python
-from datetime import date, timedelta
-
-start = date.fromisoformat(FLOOD_WINDOW_START)
-end   = date.fromisoformat(FLOOD_WINDOW_END)
-
-# Align to Monday, step by 7 days
-week_start = start - timedelta(days=start.weekday())
-weeks = []
-while week_start <= end:
-    weeks.append(week_start)
-    week_start += timedelta(days=7)
-
 FLOOD_SILVER = f"org_catalog.{SILVER_DB}.asset_flood_exposure"
 
+sedona.sql(f"""
+    SELECT
+        b.id                                                        AS asset_id,
+        b.geometry,
+        CAST(DATE_TRUNC('WEEK', w.acq_date) AS DATE)                AS flood_week,
+        MAX(RS_ZonalStats(w.raster, b.geometry, 1, 'max', true))    AS flood_max_wtr_class
+    FROM buildings b
+    JOIN flood_b01_wtr w
+        ON RS_Intersects(w.raster, b.geometry)
+    WHERE w.acq_date BETWEEN DATE('{FLOOD_WINDOW_START}')
+                          AND DATE('{FLOOD_WINDOW_END}')
+    GROUP BY b.id, b.geometry, CAST(DATE_TRUNC('WEEK', w.acq_date) AS DATE)
+""").writeTo(FLOOD_SILVER).createOrReplace()
+```
+
+At workshop scale — city or small county, ~1M assets × 15–20 weeks of
+AOI-filtered SAR tiles — the single GROUP BY shuffles a few GB and
+fits comfortably on the Medium runtime. Measured empirically: the
+full Bronze → Silver pipeline dropped from 10:30 → 5:30 after
+switching from the per-week loop to single-pass (San Diego city, 1M
+buildings, 17 weeks).
+
+## When to fall back to a week-by-week loop
+
+Use the per-week `for` loop pattern only when:
+- **Continent- or state-scale AOI** — tens of millions of assets ×
+  months of SAR data, where the single GROUP BY would OOM the shuffle
+- **Per-week checkpointing matters** — a mid-pass crash should only
+  lose one week's work rather than the whole pass
+- **Processing months or years** rather than a single storm season
+
+If you need the loop, two invariants:
+1. **First iteration** uses `createOrReplace()` — idempotent table seed.
+2. **Subsequent iterations** use `append()` — never `createOrReplace()`
+   inside the loop, or each iteration destroys the previous.
+
+```python
 for i, wk in enumerate(weeks):
-    wk_end = wk + timedelta(days=6)
-    wk_start_clamped = max(wk, start)
-    wk_end_clamped   = min(wk_end, end)
-
-    df = sedona.sql(f"""
-        SELECT
-            b.id                                                        AS asset_id,
-            b.geometry,
-            DATE('{wk.isoformat()}')                                    AS flood_week,
-            MAX(RS_ZonalStats(w.raster, b.geometry, 1, 'max', true))    AS flood_max_wtr_class
-        FROM buildings b
-        JOIN flood_b01_wtr w
-            ON RS_Intersects(w.raster, b.geometry)
-        WHERE w.acq_date BETWEEN DATE('{wk_start_clamped.isoformat()}')
-                              AND DATE('{wk_end_clamped.isoformat()}')
-        GROUP BY b.id, b.geometry
-    """)
-
+    df = sedona.sql(f"""... WHERE acq_date BETWEEN ... AND ... GROUP BY ...""")
     if i == 0:
         df.writeTo(FLOOD_SILVER).createOrReplace()
     else:
         df.writeTo(FLOOD_SILVER).append()
 ```
-
-Two invariants of this pattern:
-1. **First iteration** uses `createOrReplace()` (idempotent table seed).
-2. **Subsequent iterations** use `append()` — never `createOrReplace()`
-   inside the loop, or each iteration destroys the previous.
 
 ## Flood metrics available for Gold
 
