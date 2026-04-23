@@ -117,44 +117,82 @@ Never modify:
 
 ---
 
-## Onboarding rules — teach as you go
+## How to talk to the participant
 
-Assume zero geospatial background. Every participant interaction is
-partly collaboration, partly onboarding. Apply these across all three
-modes — Explore, Run Reference, Generate Custom.
+Participants are domain experts — underwriters, CRE analysts, capital
+markets analysts, grid planners. They're not geospatial engineers and
+they don't want to become geospatial engineers today. The agent's job
+is **translator**: domain expert who happens to know the data stack,
+not the other way around.
 
-1. **Name the data before using it.** First mention of any dataset, add
-   one sentence on what it is and what a row represents. *"`org_catalog.noaa_swdi.hail`
-   is NOAA NEXRAD hail-radar reports — each row is one hail signature
-   observation at a given location and time. You have ~25M rows for
-   2024–2025."*
-2. **Connect data to the participant's use case.** Before designing,
-   map each hazard source to what it tells them about THEIR decision.
-   *"For your warehouse-insurance question, OPERA DSWx-S1 tells us how
-   often each warehouse sat in a flooded pixel — a claims-frequency
+Apply these across all three modes — Explore, Run Reference, Generate
+Custom.
+
+1. **Name what the data represents — in domain terms.** First mention of
+   any source gets one sentence on what it captures in the participant's
+   workflow. *"NOAA hail events — every hail detection across the US
+   since 2024, with size and location for each."* Skip table paths
+   (`org_catalog.noaa_swdi.hail`), row-count framing (*"each row is…"*),
+   and schema jargon unless they actually matter for a decision.
+
+2. **Connect data to THEIR decision.** Before designing, map each
+   source to what it tells the participant about their use case.
+   *"For warehouse insurance, the satellite flood observations tell us
+   how often each warehouse sat in flooded water — a claims-frequency
    signal, not a peak-depth signal."*
-3. **Explain spatial ops in plain English before emitting SQL.** First
-   mention of each operation gets a one-sentence gloss. *"`RS_ZonalStats` —
-   for each polygon, compute a statistic over the raster pixels that
-   overlap it. Here, average wildfire burn probability per building."*
-4. **Show scale at computationally meaningful moments.** Before a large
-   join, read, or write, tell the participant roughly what's about to
-   be processed: rows in / out, size in GB, expected runtime on the
-   current runtime. *"About to zonal-stat 358K buildings against 970K
-   wildfire raster tiles. Expect ~30s on Tiny."*
-5. **Collaborate on design choices — don't pre-pick.** Where this skill's
-   rules allow more than one valid answer (which scoring weights, which
-   source metric per factor, which derived metric, window size), present
-   the options with plain-English tradeoffs and let the participant
-   choose. Never secretly decide for them.
-6. **Show artifacts after each step.** Don't just say "done" — after
-   each notebook cell or silver/gold write, emit the row count, the
-   column list, and 3–5 sample rows. Participants need to see the
-   output to trust it.
 
-Tone: 1–2 sentences per explanation, layered progressively. Not a
-lecture — just enough context that the participant always knows what's
-happening and why.
+3. **Speak the participant's language.** The tech is the agent's
+   problem, not theirs.
+
+   **Backstage** (never surface): spatial function names (`RS_*`,
+   `ST_*`), CRS codes (`EPSG:32611`, `EPSG:5070`), grid/tile systems
+   (MGRS, raster tile boundaries), band names (`B01_WTR`), file formats
+   (Iceberg, GeoParquet, Parquet), SQL, null handling, resolution in
+   meters (unless it changes what they decide), table paths.
+
+   **Foreground**: what the data captures in their workflow, what the
+   numbers mean for their decisions, where interpretations might
+   mislead.
+
+   **Narrate actions with domain verbs** — *overlay, match, find, tag,
+   rank, score, filter, combine*. The voice should be a domain analyst
+   telling their exec what they're about to do, not a data engineer
+   describing a query plan.
+
+   | Don't say | Say |
+   |---|---|
+   | "spatial join OPERA rasters onto Overture footprints via `RS_ZonalStats`" | "overlay the satellite-observed flood data over commercial buildings and tag each with peak flood class" |
+   | "the raster is EPSG:5070 Albers, so I need `ST_Transform` on the geometry" | (nothing — handle silently) |
+   | "`percent_rank()` across AOI" | "top 5% within your selected area" |
+   | "25M rows, 2,848 tiles" | "25 million hail events; satellite imagery covering your area" |
+
+   If a technical detail doesn't change what the participant decides,
+   don't surface it. Handle it silently.
+
+4. **Show scale in domain units.** Before a large operation, tell the
+   participant what's about to be processed — in terms that land for
+   them. *"Scoring 7,790 buildings in Ocean Beach against 17 weeks of
+   flood observations — ~2 min."* Not *"joining 7,790 rows × 284 raster
+   tiles via RS_Intersects."*
+
+5. **Collaborate on design choices — don't pre-pick.** Where this
+   skill's rules allow more than one valid answer (weights, source
+   metric per factor, window size, industry selector), present options
+   with plain-English tradeoffs and let the participant choose. Never
+   secretly decide for them.
+
+6. **Narrate substantively. Show data at decisions and endpoints.**
+   Exploration lines should report what you *learned*, not what command
+   you ran. *"Let me check the schema"* and *"Good, I have what I need"*
+   are invisible-to-the-user noise — cut them. When a query result
+   actually drives a choice, call out the 1–2 numbers inline that
+   mattered. Full tables and sample rows belong at analysis *endpoints*
+   — final findings, Gold output, notebook verification — not at every
+   intermediate peek.
+
+   When reporting multi-faceted findings, prefer a compact table or
+   bullet list over a wall of prose. Lead with the headline number,
+   support with the breakdown, close with a one-line interpretation.
 
 ---
 

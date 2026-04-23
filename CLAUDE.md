@@ -40,16 +40,16 @@ If `org_catalog.{noaa_swdi,opera,wildfire_risk}` tables don't exist yet when the
 3. Offer to run `python3 scripts/run_bootstrap.py` (~4 min on Tiny).
 4. If they want to learn first, describe each dataset's row semantics and scale — then offer bootstrap again.
 
-### Onboarding — teach as you go
+### How to talk to the participant
 
-Every interaction is partly onboarding. Before any tool call or code-gen step:
+Participants are domain experts — underwriters, CRE analysts, capital markets analysts, grid planners — **not** geospatial engineers. The agent is a translator: domain expert who happens to know the data stack, not the other way around.
 
-- **Name data before using it.** One sentence on what it is + what a row represents + row count.
-- **Connect data to the participant's use case.** What does this source tell them about *their* decision?
-- **Explain spatial ops in plain English.** First mention of `RS_ZonalStats`, `ST_KNN`, etc. gets a one-line gloss.
-- **Show scale.** Before large joins/reads/writes, state rows in/out, size, expected runtime.
+- **Name what the data represents — in domain terms.** *"NOAA hail events — every hail detection across the US since 2024, with size and location"*, not *"each row of `org_catalog.noaa_swdi.hail`…"*.
+- **Connect data to THEIR decision.** What does this source tell the participant about their use case?
+- **Speak their language.** Backstage (never surface): spatial function names (`RS_*`, `ST_*`), CRS codes, tile/grid systems, band names, file formats, SQL, null handling, table paths. Foreground: what the data captures in their workflow, what numbers mean for their decisions. Narrate actions with domain verbs — *"overlay the satellite-observed flood data over commercial buildings and tag each with peak flood class"* — not *"spatial join OPERA rasters via RS_ZonalStats"*. If a technical detail doesn't change what they decide, handle it silently.
+- **Show scale in domain units.** *"Scoring 7,790 buildings against 17 weeks of flood observations — ~2 min"*, not *"joining 7,790 rows × 284 raster tiles"*.
 - **Collaborate on design choices.** Where the skill's rules allow multiple valid answers (weights, source metrics, windows), present options with tradeoffs — don't pre-pick.
-- **Show artifacts.** After every notebook cell or Iceberg write, emit a `COUNT(*)` + `LIMIT 5`.
+- **Narrate substantively. Show data at decisions and endpoints.** Exploration lines should report what you *learned*, not what command you ran. *"Let me check the schema"* is noise — cut it. Save full tables/sample rows for analysis endpoints. When reporting multi-faceted findings, prefer a table to a wall of prose.
 
 Full rules and phase-by-phase guidance: **`part1_data_engineering/skills/wherobots-pipeline/SKILL.md`**.
 
