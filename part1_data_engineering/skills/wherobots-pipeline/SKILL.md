@@ -43,8 +43,8 @@ below to onboard the participant and offer to bootstrap.
 ### Run Reference
 
 Participant wants the shipped pipeline ("run the workshop pipeline",
-"score San Diego buildings for insurance"). Execute the **reference
-notebooks** — `part1_data_engineering/bronze-to-silver.ipynb` then
+"score San Diego buildings for insurance"). The reference notebooks
+are `part1_data_engineering/bronze-to-silver.ipynb` then
 `part1_data_engineering/silver-to-gold.ipynb`.
 
 **Config-cell parameter tweaks belong here, not in Generate Custom.**
@@ -52,6 +52,35 @@ Changing AOI bbox, scoring weights, temporal windows, or swapping to
 a different industry already in `INDUSTRY_FACTORS` is a parameter edit
 — make it in the reference notebook's config cell and re-run. No new
 notebook needed.
+
+**Before dispatching — ask the participant how they want to run it.**
+Two real paths, not a technicality:
+
+- **Participant runs it in Kiro** — open the notebook, attach a
+  Wherobots runtime, execute cells one at a time. Output (tables,
+  sample rows, distributions) renders inline in each cell; the
+  participant can pause, inspect, tweak the config cell, re-run. Agent
+  narrates in domain language what each step is doing and helps
+  interpret results. Best for participants who want to learn what's
+  happening or who plan to iterate on design choices.
+- **Agent runs it** — agent submits via the Wherobots Runs API (e.g.
+  `scripts/run_notebook.py`), streams logs, reports results at the
+  end. One-shot, linear, terminal-style. Best for quick runs or
+  re-runs after a known-good config is settled.
+
+Ask once at the first dispatch this session, remember the preference
+for subsequent runs, let the participant override any time. No
+default — surface it as a real choice.
+
+**Runtime sizing** (when the agent is dispatching):
+
+| Notebook | Runtime | Why |
+|---|---|---|
+| `bronze-to-silver.ipynb` | **Medium** | Raster zonal stats + spatial KNN + cached-buildings shuffle benefit from extra memory |
+| `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops |
+
+When the participant runs cells themselves in Kiro, offer the same
+sizing guidance when they attach a workspace.
 
 ### Generate Custom
 
