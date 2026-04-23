@@ -318,7 +318,6 @@ table covers only the non-obvious traps LLMs consistently hit.
 | Zonal stats aggregation | No GROUP BY → duplicate rows | `GROUP BY asset_id, geometry` (assets span tiles) |
 | Sub-pixel footprints | `ST_Buffer(geometry, 30)` then zonal stats | Use `allTouched=true` (5th arg) — faster, no extra shuffle |
 | Iceberg write | `df.write.format("iceberg").save()` | `df.writeTo("...").createOrReplace()` |
-| Iceberg append in loop | `.createOrReplace()` each iteration (destroys previous) | First iteration `.createOrReplace()`, subsequent `.append()` |
 | Iceberg read | `sedona.read.format("iceberg").load()` | `sedona.table("catalog.db.table")` |
 | S3 anonymous creds | Global anonymous provider | Per-bucket: `fs.s3a.bucket.<NAME>.aws.credentials.provider` |
 | Missing data | `df.fillna(0)` | Keep NULLs + `has_<source>_data` flags |

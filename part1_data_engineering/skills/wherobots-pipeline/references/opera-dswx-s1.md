@@ -65,12 +65,11 @@ to ISO weeks so each (asset, week) row is one observation:
 This keeps the temporal signal while cutting row count by roughly 3×
 vs per-acquisition rows.
 
-## Writing the weekly Silver table — single SQL pass (default)
+## Writing the weekly Silver table
 
-Default: **one SQL pass** using `DATE_TRUNC('WEEK', acq_date)` to derive
-`flood_week` and a GROUP BY on `(asset, flood_week)`. Spark's
-`DATE_TRUNC('WEEK', …)` returns the Monday (ISO week start), which
-matches the bucketing we want.
+One SQL pass: derive `flood_week` from `acq_date` via
+`DATE_TRUNC('WEEK', …)` (returns the Monday, matching the ISO week
+start we want), GROUP BY `(asset, flood_week)`, write once.
 
 ```python
 FLOOD_SILVER = f"org_catalog.{SILVER_DB}.asset_flood_exposure"
@@ -88,36 +87,6 @@ sedona.sql(f"""
                           AND DATE('{FLOOD_WINDOW_END}')
     GROUP BY b.id, b.geometry, CAST(DATE_TRUNC('WEEK', w.acq_date) AS DATE)
 """).writeTo(FLOOD_SILVER).createOrReplace()
-```
-
-At workshop scale — city or small county, ~1M assets × 15–20 weeks of
-AOI-filtered SAR tiles — the single GROUP BY shuffles a few GB and
-fits comfortably on the Medium runtime. Measured empirically: the
-full Bronze → Silver pipeline dropped from 10:30 → 5:30 after
-switching from the per-week loop to single-pass (San Diego city, 1M
-buildings, 17 weeks).
-
-## When to fall back to a week-by-week loop
-
-Use the per-week `for` loop pattern only when:
-- **Continent- or state-scale AOI** — tens of millions of assets ×
-  months of SAR data, where the single GROUP BY would OOM the shuffle
-- **Per-week checkpointing matters** — a mid-pass crash should only
-  lose one week's work rather than the whole pass
-- **Processing months or years** rather than a single storm season
-
-If you need the loop, two invariants:
-1. **First iteration** uses `createOrReplace()` — idempotent table seed.
-2. **Subsequent iterations** use `append()` — never `createOrReplace()`
-   inside the loop, or each iteration destroys the previous.
-
-```python
-for i, wk in enumerate(weeks):
-    df = sedona.sql(f"""... WHERE acq_date BETWEEN ... AND ... GROUP BY ...""")
-    if i == 0:
-        df.writeTo(FLOOD_SILVER).createOrReplace()
-    else:
-        df.writeTo(FLOOD_SILVER).append()
 ```
 
 ## Flood metrics available for Gold
