@@ -67,6 +67,12 @@ Two real paths, not a technicality:
   `scripts/run_notebook.py`), streams logs, reports results at the
   end. One-shot, linear, terminal-style. Best for quick runs or
   re-runs after a known-good config is settled.
+  When the agent dispatches, the agent **owns monitoring that run to
+  completion**. Poll `GET /runs/{id}` on a short interval, track the
+  run ID, and surface the terminal status (`COMPLETED` / `FAILED` /
+  `CANCELLED`) proactively — don't wait for the participant to ask
+  *"is it done?"*, and never claim to not know the status of a run
+  you dispatched.
 
 Ask once at the first dispatch this session, remember the preference
 for subsequent runs, let the participant override any time. No
@@ -81,6 +87,26 @@ default — surface it as a real choice.
 
 When the participant runs cells themselves in Kiro, offer the same
 sizing guidance when they attach a workspace.
+
+**Reporting Gold completion — one row per industry, same shape.**
+When all four Gold tables land (`insurance_exposure`, `cre_risk`,
+`capital_markets_signals`, `energy_asset_risk`), produce a single
+tier-distribution table with the same columns for every industry:
+
+| Industry | critical | high | elevated | moderate | low | Total |
+|---|---|---|---|---|---|---|
+| insurance | … | … | … | … | … | … |
+| commercial_real_estate | … | … | … | … | … | … |
+| capital_markets | … | … | … | … | … | … |
+| energy_utilities | … | … | … | … | … | … |
+
+Don't mix industries' tiers into one row, drop an industry from the
+summary, or substitute a non-tier metric for a missing one. If a
+write didn't land (Aurora-skipped is not a miss; Iceberg missing
+is), call it out explicitly as its own line. Follow with a one-line
+interpretation pointing out where the distributions diverge across
+industries — that's where participants see the *"same data, different
+lens"* insight.
 
 ### Generate Custom
 
