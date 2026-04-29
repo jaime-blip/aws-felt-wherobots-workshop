@@ -7,7 +7,7 @@ allowed-tools: python_repl file_read
 # Workshop-Specific Notes (READ FIRST)
 
 ## Aurora PostgreSQL Source
-- **Source ID:** Read from `os.environ["FELT_SOURCE_ID"]` (default: `e5UKkPZxTwiR9CxbRzFw9AZA`)
+- **Source ID:** Pre-resolved into the `SOURCE_ID` variable at agent startup (by looking up the Felt source named `FELT_SOURCE_NAME`, default `workshop-db`). Do not read `FELT_SOURCE_ID` — it no longer exists.
 - Use `add_source_layer()` with `"from": "sql"` and this source_id for all database queries
 - **ALWAYS pass `api_token=token` to every felt_python function call**
 - Get token with: `token = os.environ["FELT_API_TOKEN"]`

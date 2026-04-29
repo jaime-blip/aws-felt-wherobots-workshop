@@ -21,13 +21,13 @@ For the full API reference, see [references/FULL_REFERENCE.md](references/FULL_R
 ```python
 # Pre-loaded in python_repl:
 TOKEN = os.environ["FELT_API_TOKEN"]
-SOURCE_ID = os.environ["FELT_SOURCE_ID"]
+SOURCE_ID  # resolved at agent startup from FELT_SOURCE_NAME (default "workshop-db")
 
 # felt_python functions (always pass api_token=TOKEN):
-from felt_python import create_map, add_source_layer, list_layers, update_layer_style
+from felt_python import create_map, add_source_layer, list_layers, update_layer_style, list_library_layers, duplicate_layers
 
 # Helper functions:
-from felt_helpers import wait_for_layer, categorical_style, numeric_style
+from felt_helpers import wait_for_layer, categorical_style, numeric_style, find_library_layers, add_library_layer
 ```
 
 ## Workflow
@@ -86,6 +86,53 @@ layers = json.loads(urllib.request.urlopen(req).read())
 for layer in layers:
     print(f"  {layer['name']}: status={layer['status']}, features={layer.get('metadata',{}).get('feature_count','?')}")
 ```
+
+## Library Layers (Org Library / Felt Library)
+
+Raster layers and reference vectors already in the user's Felt library — things
+they see in the UI under **Add Layer → From Library** (e.g. "BP CONUS Burn
+Probability", basemaps, admin boundaries) — are **not** SQL sources and
+**cannot** be added via `add_source_layer`. That endpoint returns 422 on
+library layers. They must be *duplicated* from the library onto the map via
+`felt_python.duplicate_layers`.
+
+Use the `add_library_layer` helper:
+
+```python
+# Resolve by name (case-insensitive substring). Errors if ambiguous.
+layer = add_library_layer(map_id, name="BP CONUS")
+
+# Disambiguate if multiple matches:
+matches = find_library_layers("burn probability")
+for m in matches:
+    print(m["id"], m["name"], m["geometry_type"])
+layer = add_library_layer(map_id, layer_id=matches[0]["id"])
+
+# Control which library to search:
+#   source='workspace' → Org Library only
+#   source='felt'      → Felt's public library only
+#   source='all'       → both (default)
+layer = add_library_layer(map_id, name="California counties", source="felt")
+```
+
+Under the hood this calls:
+
+```python
+duplicate_layers(
+    duplicate_params=[{
+        "source_layer_id": <library_layer_id>,
+        "destination_map_id": map_id,
+    }],
+    api_token=TOKEN,
+)
+```
+
+The helper polls with `wait_for_layer` until the duplicated layer finishes
+processing, so you can style it immediately afterward. For raster layers,
+styling is typically unnecessary — just add and move on.
+
+**When combining with your own SQL layers**, add the library (raster) layer
+first so it sits underneath as context, then add your SQL layers on top.
 
 ## Multi-Layer Maps
 

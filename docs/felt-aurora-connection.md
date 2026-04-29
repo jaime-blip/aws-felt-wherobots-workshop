@@ -58,42 +58,36 @@ curl -s -H "Authorization: Bearer $FELT_API_TOKEN" \
   https://felt.com/api/v2/sources | jq '.sources[] | {id, name}'
 ```
 
-### 7. Update Your `.env`
+### 7. Name the Source `workshop-db`
 
-Add the source ID to your `.env` file at the project root:
+Name the Felt source exactly `workshop-db` when creating it. The agent
+resolves the source id by this name at startup — no source id needs to be
+saved in `.env`.
+
+If you prefer a different name, set it in `.env`:
 
 ```bash
-FELT_SOURCE_ID=<your-source-id-from-step-6>
+FELT_SOURCE_NAME=my-custom-name
 ```
 
 ### 8. Verify It Works
 
-Test the connection by adding a source layer to a map via the Felt API:
+Run the agent:
 
 ```bash
-curl -s -X POST \
-  -H "Authorization: Bearer $FELT_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "from": "sql",
-    "source_id": "'$FELT_SOURCE_ID'",
-    "query": "SELECT COUNT(*) FROM workshop.insurance_exposure"
-  }' \
-  https://felt.com/api/v2/maps/<any-map-id>/add_source_layer
+cd part2_map_agent && ./run.sh
 ```
 
-## About the Hardcoded Fallback
+On startup it prints `✅ Felt source 'workshop-db' → <source_id>`. If the
+source isn't found, you'll see a clear error listing the available source
+names — rename your source or update `FELT_SOURCE_NAME` to match.
 
-In `part2_map_agent/agent.py`, line 38, there is a hardcoded fallback source ID:
+## Source Resolution
 
-```python
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "rYZY3hxzTJCJnEZP2k1r0B")
-```
-
-This fallback (`rYZY3hxzTJCJnEZP2k1r0B`) points to the demo Aurora instance
-used during development. **You should replace it** by setting `FELT_SOURCE_ID`
-in your `.env` file. The fallback exists only so the demo works out of the box
-for the workshop team — it will not work for your Aurora cluster.
+`part2_map_agent/agent.py` calls `resolve_source_id()` from
+`felt_helpers.py`, which queries Felt's `list_sources` API and matches by
+name (case-insensitive). This replaces the previous `FELT_SOURCE_ID` env
+var. If you had one set, you can delete it.
 
 ## Network Considerations
 

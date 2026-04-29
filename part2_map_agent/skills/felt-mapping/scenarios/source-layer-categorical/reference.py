@@ -1,9 +1,9 @@
 from felt_python import create_map, add_source_layer, update_layer_style
-from felt_helpers import wait_for_layer, categorical_style
+from felt_helpers import wait_for_layer, categorical_style, resolve_source_id
 import os
 
 TOKEN = os.environ["FELT_API_TOKEN"]
-SOURCE_ID = os.environ["FELT_SOURCE_ID"]
+SOURCE_ID = resolve_source_id()
 
 # Create map
 m = create_map(title="Wildfire Locations by Cause", api_token=TOKEN)

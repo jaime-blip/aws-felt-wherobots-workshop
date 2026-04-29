@@ -19,11 +19,11 @@ User prompt → Strands Agent → reads skills/*.md → generates Python →
 
 ## Data (pre-loaded in Aurora, `workshop` schema)
 
-4 Gold tables, ~358K San Diego buildings each:
-- `workshop.insurance_exposure` — risk_tier, wildfire/flood/weather factors, triage_priority
-- `workshop.cre_risk` — acquisition_screen_flag, environmental_risk_index
-- `workshop.capmarkets_signals` — disruption_probability, supply_chain_vulnerability
-- `workshop.energy_infra_risk` — outage_probability, vegetation_encroachment_risk
+4 Gold tables, ~1M San Diego buildings each:
+- `workshop.insurance_exposure` — risk_tier, wildfire/flood/weather factors, triage_priority, relative_risk_band
+- `workshop.cre_risk` — risk_tier, acquisition_screen_flag, exposure_magnitude_index
+- `workshop.capital_markets_signals` — disruption_signal, supply_chain_vulnerability, event_density_signal (no risk_tier)
+- `workshop.energy_asset_risk` — risk_tier, outage_probability, wildfire_ignition_risk
 
 ## MCP Servers
 

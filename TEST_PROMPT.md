@@ -92,7 +92,7 @@ python3 -c "import json; json.load(open('.kiro/mcp.json')); print('OK')"
 
 ```bash
 echo "=== Required vars ==="
-for var in WHEROBOTS_API_KEY AURORA_DSN FELT_API_TOKEN FELT_SOURCE_ID AWS_PROFILE AWS_DEFAULT_REGION BEDROCK_MODEL_ID; do
+for var in WHEROBOTS_API_KEY AURORA_DSN FELT_API_TOKEN FELT_SOURCE_NAME AWS_PROFILE AWS_DEFAULT_REGION BEDROCK_MODEL_ID; do
   grep -q "$var" .env.example && echo "✅ $var" || echo "❌ $var MISSING"
 done
 ```
