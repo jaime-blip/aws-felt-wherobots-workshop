@@ -62,7 +62,7 @@ def _call_bedrock(
     """Call via Bedrock converse API."""
     import boto3
 
-    region = os.environ.get("AWS_REGION", "us-west-2")
+    region = os.environ.get("AWS_REGION", "us-east-1")
     client = boto3.client("bedrock-runtime", region_name=region)
     model_id = _get_bedrock_model_id(model)
 

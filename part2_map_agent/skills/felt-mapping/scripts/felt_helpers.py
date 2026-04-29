@@ -16,11 +16,43 @@ from felt_python import (
     update_layers,
     add_source_layer,
     list_layers,
+    list_sources,
+    list_library_layers,
+    duplicate_layers,
     update_layer_style,
 )
 
 TOKEN = os.environ.get("FELT_API_TOKEN")
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "rYZY3hxzTJCJnEZP2k1r0B")
+
+
+def resolve_source_id(name: str = None, api_token: str = None) -> str:
+    """Resolve a Felt source_id by looking up a source by name.
+
+    Args:
+        name: Source name to match (case-insensitive). Defaults to
+              FELT_SOURCE_NAME env var, then 'workshop-db'.
+        api_token: Felt API token. Defaults to FELT_API_TOKEN env var.
+
+    Returns:
+        The matching source id.
+
+    Raises:
+        RuntimeError: If no source matches. Message instructs the instructor
+                      to connect the Aurora cluster in the Felt UI.
+    """
+    name = name or os.environ.get("FELT_SOURCE_NAME", "workshop-db")
+    token = api_token or TOKEN
+    sources = list_sources(api_token=token)
+    target = name.strip().lower()
+    matches = [s for s in sources if (s.get("name") or "").strip().lower() == target]
+    if not matches:
+        available = ", ".join(repr(s.get("name")) for s in sources)
+        raise RuntimeError(
+            f"No Felt source named {name!r} found. Connect the workshop Aurora "
+            f"cluster in the Felt UI and name it {name!r}. "
+            f"Available sources: {available}"
+        )
+    return matches[0]["id"]
 
 
 # ── Layer Processing ──────────────────────────────────────────
@@ -89,12 +121,90 @@ def rename_layer(map_id: str, layer_id: str, name: str) -> None:
     print(f"  Renamed layer to: {name}")
 
 
+def find_library_layers(query: str, source: str = "all", api_token: str = None) -> list:
+    """Search Org/Felt library layers by case-insensitive name substring.
+
+    Args:
+        query: Substring to match against layer name.
+        source: 'workspace' (Org library), 'felt' (Felt library), or 'all'.
+        api_token: Defaults to FELT_API_TOKEN env var.
+
+    Returns:
+        List of library layer dicts (each has 'id', 'name', 'geometry_type', ...).
+    """
+    token = api_token or TOKEN
+    lib = list_library_layers(source=source, api_token=token)
+    q = (query or "").lower()
+    return [l for l in lib.get("layers", []) if q in (l.get("name") or "").lower()]
+
+
+def add_library_layer(
+    map_id: str,
+    name: str = None,
+    layer_id: str = None,
+    source: str = "all",
+    wait: bool = True,
+    api_token: str = None,
+) -> dict:
+    """Add a layer from the Org/Felt library to a map via `duplicate_layers`.
+
+    Library layers (rasters, reference vectors) cannot be added via
+    `add_source_layer` — that endpoint is only for SQL/data source layers.
+    Use this for anything that lives in the Felt library UI under
+    "Add Layer → From Library".
+
+    Pass either `name` (substring match) or `layer_id` directly.
+
+    Args:
+        map_id: Destination map id.
+        name: Substring of the library layer's display name. Must match exactly
+              one layer — if ambiguous, pass layer_id instead.
+        layer_id: Library layer id (from find_library_layers() or the UI).
+        source: 'workspace' (Org), 'felt', or 'all' (default).
+        wait: Poll until the new layer finishes processing (default True).
+        api_token: Defaults to FELT_API_TOKEN.
+
+    Returns:
+        The newly added layer dict.
+    """
+    token = api_token or TOKEN
+    if not layer_id:
+        if not name:
+            raise ValueError("Pass either name=... or layer_id=...")
+        matches = find_library_layers(name, source=source, api_token=token)
+        if not matches:
+            raise RuntimeError(f"No library layer matching {name!r}")
+        if len(matches) > 1:
+            names = [m.get("name") for m in matches]
+            raise RuntimeError(
+                f"{len(matches)} library layers match {name!r}: {names}. "
+                "Pass layer_id= to disambiguate."
+            )
+        layer_id = matches[0]["id"]
+        print(f"  Found library layer: {matches[0].get('name')!r} ({layer_id})")
+
+    before_count = len(list_layers(map_id=map_id, api_token=token))
+    duplicate_layers(
+        duplicate_params=[{
+            "source_layer_id": layer_id,
+            "destination_map_id": map_id,
+        }],
+        api_token=token,
+    )
+    print(f"  Duplicated library layer → map {map_id}")
+
+    if not wait:
+        return {"id": layer_id, "status": "queued"}
+
+    return wait_for_layer(map_id, expect_count=before_count + 1)
+
+
 def screenshot_map(map_url: str, output_path: str = None, wait_s: int = 10) -> str:
     """Take a screenshot of a Felt map using Playwright headless browser.
 
     Args:
         map_url: Felt map URL.
-        output_path: Where to save the PNG. If None, auto-generates in data/screenshots/.
+        output_path: Where to save the PNG. If None, auto-generates in part2_map_agent/screenshots/.
         wait_s: Seconds to wait for map tiles to load (default 10).
 
     Returns:
@@ -106,7 +216,8 @@ def screenshot_map(map_url: str, output_path: str = None, wait_s: int = 10) -> s
     if output_path is None:
         match = re.search(r'([A-Za-z0-9]{10,})(?:\?|$)', map_url)
         map_id = match.group(1) if match else "map"
-        screenshots_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "data", "screenshots")
+        # felt_helpers.py lives at part2_map_agent/skills/felt-mapping/scripts/ — three levels up lands in part2_map_agent/
+        screenshots_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "screenshots"))
         os.makedirs(screenshots_dir, exist_ok=True)
         output_path = os.path.join(screenshots_dir, f"{map_id}.png")
 
@@ -127,6 +238,7 @@ def create_map_with_sql(
     sql: str,
     style: dict = None,
     timeout_s: int = 60,
+    source_id: str = None,
 ) -> dict:
     """Full pipeline: create map → add SQL layer → wait → style.
 
@@ -135,10 +247,13 @@ def create_map_with_sql(
         sql: SQL query against the Aurora source.
         style: Optional FSL style dict (must include version: "2.3.1").
         timeout_s: Max seconds to wait for layer processing.
+        source_id: Felt source id. Defaults to resolve_source_id().
 
     Returns:
         Dict with map_id, map_url, layer_id, status.
     """
+    source_id = source_id or resolve_source_id()
+
     # Create map
     m = create_map(title=title, api_token=TOKEN)
     map_id = m["id"]
@@ -146,7 +261,7 @@ def create_map_with_sql(
     print(f"  Map created: {map_url}")
 
     # Add source layer
-    params = {"from": "sql", "source_id": SOURCE_ID, "query": sql}
+    params = {"from": "sql", "source_id": source_id, "query": sql}
     add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
     print(f"  SQL layer added, waiting for processing...")
 

@@ -32,7 +32,19 @@ from strands_tools import file_read, python_repl
 
 # ── Constants ──────────────────────────────────────────────────
 SKILLS_DIR = Path(__file__).parent / "skills"
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "rYZY3hxzTJCJnEZP2k1r0B")
+
+# Resolve Felt source id at startup by name (default: "workshop-db").
+# Fails fast with a clear message if the source hasn't been connected in Felt.
+sys.path.insert(0, str(SKILLS_DIR / "felt-mapping" / "scripts"))
+from felt_helpers import resolve_source_id  # noqa: E402
+
+try:
+    SOURCE_ID = resolve_source_id()
+    _SOURCE_NAME = os.environ.get("FELT_SOURCE_NAME", "workshop-db")
+    print(f"✅ Felt source {_SOURCE_NAME!r} → {SOURCE_ID}")
+except Exception as e:
+    print(f"❌ {e}", file=sys.stderr)
+    sys.exit(1)
 
 # ── Skills Plugin ──────────────────────────────────────────────
 skills_plugin = AgentSkills(skills=str(SKILLS_DIR))
@@ -45,14 +57,14 @@ from pathlib import Path
 load_dotenv(Path("{Path(__file__).parent.parent / '.env'}"), override=True)
 
 import felt_python
-from felt_python import create_map, add_source_layer, list_layers, update_layer_style
+from felt_python import create_map, add_source_layer, list_layers, update_layer_style, list_library_layers, duplicate_layers
 
 import sys
 sys.path.insert(0, "{SKILLS_DIR / 'felt-mapping' / 'scripts'}")
-from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql, rename_layer, screenshot_map
+from felt_helpers import wait_for_layer, categorical_style, numeric_style, create_map_with_sql, rename_layer, screenshot_map, find_library_layers, add_library_layer
 
 TOKEN = os.environ.get("FELT_API_TOKEN", "")
-SOURCE_ID = os.environ.get("FELT_SOURCE_ID", "{SOURCE_ID}")
+SOURCE_ID = "{SOURCE_ID}"  # resolved at startup from FELT_SOURCE_NAME
 AURORA_DSN = os.environ.get("AURORA_DSN", "")
 print("✅ Ready: psycopg2, felt_python, helpers, TOKEN, SOURCE_ID, AURORA_DSN")
 """
@@ -60,22 +72,27 @@ print("✅ Ready: psycopg2, felt_python, helpers, TOKEN, SOURCE_ID, AURORA_DSN")
 # ── System Prompt ──────────────────────────────────────────────
 SYSTEM_PROMPT = f"""You are a geospatial map builder agent. You create interactive Felt maps from PostgreSQL/PostGIS data.
 
-## Available Data (workshop schema — 358,985 San Diego buildings each)
+## Available Data (workshop schema — 1,035,306 San Diego buildings each)
 
 ### workshop.insurance_exposure
-Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score (0-0.7), risk_tier (low/moderate/elevated/high), exposure_delta, triage_priority, estimated_loss_band, score_explanation
+Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score, risk_tier, exposure_delta, triage_priority, relative_risk_band, score_explanation, weather_window_start, weather_window_end
 
 ### workshop.cre_risk
-Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score (0-0.7), risk_tier, acquisition_screen_flag (boolean), environmental_risk_index, hazard_proximity_m, score_explanation
+Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score, risk_tier, acquisition_screen_flag (boolean), exposure_magnitude_index, hazard_proximity_m, score_explanation
 
-### workshop.capmarkets_signals
-Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score, disruption_probability (0-1, sigmoid), supply_chain_vulnerability, event_signal_strength, score_explanation
+### workshop.capital_markets_signals
+Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score, disruption_signal, supply_chain_vulnerability, event_density_signal, score_explanation, weather_window_start, weather_window_end
 
-### workshop.energy_infra_risk
-Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score (0-0.7), risk_tier, outage_probability, vegetation_encroachment_risk, weather_impact_frequency, score_explanation
+### workshop.energy_asset_risk
+Columns: asset_id, geometry, building_class, wildfire_factor, flood_factor, severe_weather_factor, risk_score, risk_tier, outage_probability, wildfire_ignition_risk, weather_impact_frequency, score_explanation
 
-Risk tiers: low, moderate, elevated, high (no "critical" tier exists)
+### workshop.flood_extent (raster-derived water polygons)
+Columns: id, geometry (Polygon, any type), water_class (1/2/3), water_class_name ('open_water'/'partial_surface_water'/'ice_snow_inundation'), observation_date, area_m2, source
+Source: OPERA DSWx-S1 Sentinel-1 SAR, clipped to San Diego, ocean polygons removed. Use for flood-proximity queries (`ST_Intersects`, `ST_DWithin`) against building tables.
+
+Risk tiers: low, moderate, elevated, high, critical
 Region: San Diego County, CA (bbox: -117.6 to -116.0, 32.5 to 33.5)
+Note: `capital_markets_signals` has no `risk_tier` column — use `risk_score` thresholds instead.
 
 ## Workflow
 1. Activate the felt-mapping skill for styling instructions
@@ -90,6 +107,8 @@ Region: San Diego County, CA (bbox: -117.6 to -116.0, 32.5 to 33.5)
 - `numeric_style(attribute)` — builds FSL for numeric columns
 - `rename_layer(map_id, layer_id, name)` — rename a layer
 - `screenshot_map(map_url, wait_s=10)` — screenshot with headless Playwright
+- `find_library_layers(query, source='all')` — search Org/Felt library by name substring
+- `add_library_layer(map_id, name=..., source='all')` — duplicate a library layer onto a map
 - `TOKEN`, `SOURCE_ID` — Felt credentials
 
 ## Code Pattern (single layer)
@@ -128,9 +147,25 @@ screenshot_map(map_url)
 print(f"✅ {{map_url}}")
 ```
 
+## Library Layers (from Org / Felt Library)
+
+Rasters and reference vectors already in the user's Felt library (e.g. "BP CONUS Burn Probability", basemaps, boundaries) CANNOT be added with `add_source_layer` — that endpoint is only for SQL/data sources and will 422. Use `add_library_layer` instead, which wraps `felt_python.duplicate_layers`:
+
+```python
+# By name (substring, case-insensitive) — errors if ambiguous:
+layer = add_library_layer(map_id, name="BP CONUS")
+
+# If ambiguous, disambiguate first:
+matches = find_library_layers("burn probability")
+for m in matches: print(m["id"], m["name"])
+layer = add_library_layer(map_id, layer_id="kpn54ZyZRcucq87vmGi6mC")
+```
+
+`source` can be `'workspace'` (Org library), `'felt'` (Felt's public library), or `'all'` (default).
+
 ## Critical Rules
 - ALWAYS use `workshop.` schema prefix in SQL queries — bare table names FAIL
-- ALWAYS add LIMIT to queries (max 10000) — 358K rows will timeout
+- ALWAYS add LIMIT to queries (max 10000) — 1M rows will timeout
 - Write the FULL pipeline in as few python_repl calls as possible (ideally ONE)
 - NEVER run discovery/exploration queries — use the schema above
 - NEVER create more than ONE map per request
@@ -148,9 +183,9 @@ def get_model():
     return BedrockModel(
         model_id=os.environ.get(
             "BEDROCK_MODEL_ID",
-            "us.anthropic.claude-sonnet-4-20250514-v1:0",
+            "us.anthropic.claude-opus-4-7",
         ),
-        region_name=os.environ.get("AWS_REGION", "us-west-2"),
+        region_name=os.environ.get("AWS_REGION", "us-east-1"),
     )
 
 

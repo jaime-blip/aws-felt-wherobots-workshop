@@ -203,9 +203,11 @@ Resources:
       DatabaseName: !Ref DBName
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Ref DBMasterPassword
+      # Serverless v2 range sized for hefty PostGIS joins (100M-row territory).
+      # 32 ACU peak ≈ 16 vCPU / 64 GB RAM. Scales back to 0.5 ACU when idle.
       ServerlessV2ScalingConfiguration:
         MinCapacity: 0.5
-        MaxCapacity: 8
+        MaxCapacity: 32
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref AuroraSecurityGroup
@@ -214,11 +216,32 @@ Resources:
         - Key: Name
           Value: geospatial-workshop-aurora
 
+  # Instance-level parameter group — tuned for PostGIS / large-join analytics.
+  # These params are instance-scoped on Aurora PG 16 (not cluster-scoped),
+  # which is why they live here and not on AuroraCluster.
+  AuroraInstanceParams:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: PostGIS analytics tuning for the workshop Aurora instance
+      Family: aurora-postgresql16
+      Parameters:
+        # Memory per sort/hash operator (default 4MB → spills to disk on big joins)
+        work_mem: '262144'                        # 256 MB (value is in kB)
+        maintenance_work_mem: '1048576'           # 1 GB  (value is in kB)
+        # Parallelism — default max_parallel_workers_per_gather=2 is anemic
+        max_parallel_workers_per_gather: '8'
+        max_parallel_workers: '16'
+        max_worker_processes: '16'
+        # Aurora is on NVMe — drop default random_page_cost 4.0 so the planner
+        # stops unfairly preferring seq scans over index scans.
+        random_page_cost: '1.1'
+
   AuroraInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       DBClusterIdentifier: !Ref AuroraCluster
       DBInstanceClass: db.serverless
+      DBParameterGroupName: !Ref AuroraInstanceParams
       Engine: aurora-postgresql
       PubliclyAccessible: true
 

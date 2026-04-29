@@ -133,7 +133,7 @@ Run the Map Builder Agent:
 |-----------|-----------|------|
 | **Data Processing** | Wherobots Cloud (Apache Sedona) + Wherobots MCP | Spatial SQL, medallion pipeline |
 | **Data Store** | Amazon Aurora PostgreSQL 17 + PostGIS | Gold layer serving, spatial queries |
-| **AI Orchestration** | Amazon Bedrock (Claude Sonnet) + Strands Agents SDK | Agent that generates and executes Python |
+| **AI Orchestration** | Amazon Bedrock (Claude Opus 4.7) + Strands Agents SDK | Agent that generates and executes Python |
 | **Visualization** | Felt + Felt MCP (`felt.com/mcp`) | Interactive maps, styling, sharing |
 | **Infrastructure** | Amazon S3, AWS IAM, CloudFormation | Storage, auth, provisioning |
 

@@ -48,7 +48,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 | **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
 | **AWS account** | Pre-provisioned for the workshop | Part 1 + 2 |
 | **Aurora PostgreSQL** | Pre-provisioned for the workshop | Part 1 + 2 |
-| **AWS Bedrock model access** | Pre-provisioned (Claude Sonnet in `us-west-2`) | Part 2 |
+| **AWS Bedrock model access** | Pre-provisioned (Claude Opus 4.7 in `us-east-1`) | Part 2 |
 
 > **Note:** For instructor-led workshops, API keys and AWS accounts are pre-provisioned. For self-service, follow the links above to create accounts.
 
@@ -94,11 +94,12 @@ AURORA_DSN=postgresql://user:password@your-aurora-host:5432/workshop
 
 # Felt
 FELT_API_TOKEN=your-felt-api-token
-FELT_SOURCE_ID=your-felt-source-id
+# Optional — defaults to "workshop-db". Must match the source name in Felt.
+FELT_SOURCE_NAME=workshop-db
 
 # AWS (for Bedrock)
 AWS_PROFILE=default
-AWS_DEFAULT_REGION=us-west-2
+AWS_DEFAULT_REGION=us-east-1
 ```
 
 ### Step 3 — Set up Kiro with Wherobots extension (recommended)
@@ -154,20 +155,12 @@ This step creates a **Felt data source** so the Map Builder Agent (Part 2) can q
    - **Username / Password:** From your Aurora credentials
    - **Schema:** `workshop`
 6. Click **Test Connection** — you should see a green checkmark
-7. Click **Save** to create the source
-8. The source is now available across your workspace for any map
-9. To get the **Source ID**, use the Felt API:
-   ```bash
-   curl -s -H "Authorization: Bearer $FELT_API_TOKEN" \
-     https://felt.com/api/v2/sources | python3 -m json.tool
-   ```
+7. **Name the source exactly `workshop-db`** (this is what the agent looks up at startup).
+8. Click **Save** to create the source. It's now available across your workspace.
 
-10. Update `.env` with your source ID:
-    ```bash
-    FELT_SOURCE_ID=<your-source-id>
-    ```
+The agent resolves this source by name at runtime via the Felt API — no source ID is needed in `.env`. If you want to use a different name, set `FELT_SOURCE_NAME` in `.env` to match.
 
-> **For instructor-led workshops:** The Felt source is pre-configured. You'll receive the `FELT_SOURCE_ID` with your other credentials.
+> **For instructor-led workshops:** The Felt source is pre-configured as `workshop-db`. Nothing else to set.
 >
 > **Network note:** Felt connects from its infrastructure to your Aurora. For the workshop, Aurora is publicly accessible with the correct security group rules. For production deployments, see `docs/felt-aurora-connection.md` for network considerations.
 
@@ -579,7 +572,7 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 | Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this |
 | Agent generates wrong SQL | Schema is in the system prompt — check `agent.py` for table definitions |
 | `ModuleNotFoundError` | Activate virtualenv: `source .venv/bin/activate` |
-| Agent uses wrong source ID | Check `FELT_SOURCE_ID` in `.env` |
+| Agent can't find Felt source | Agent resolves by name (`FELT_SOURCE_NAME`, default `workshop-db`). Ensure a Felt source with that exact name is connected to Aurora. |
 
 ## Useful Links
 
