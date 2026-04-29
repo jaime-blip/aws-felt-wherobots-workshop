@@ -69,12 +69,23 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 
 ### Step 1 — Clone & install
 
+> **Required for Part 2.** The Map Builder Agent runs locally in this Python
+> virtualenv. Don't skip the `python3 -m venv .venv` line — Part 2's
+> `./run.sh` activates `.venv/` on every invocation and will error out if it
+> doesn't exist.
+
 ```bash
 git clone https://github.com/jaime-blip/aws-felt-wherobots-workshop.git
 cd aws-felt-wherobots-workshop
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r part2_map_agent/requirements.txt
+```
+
+Verify the install:
+
+```bash
+python -c "import strands, strands_tools, felt_python; print('venv ready')"
 ```
 
 ### Step 2 — Configure credentials
@@ -411,6 +422,29 @@ User: "Show me buildings with high wildfire risk near Poway"
                     ▼
             Felt Map URL 🗺️
 ```
+
+### Prerequisites for Part 2
+
+Part 2 runs the Strands agent locally in **the Python virtualenv you created in
+Setup Step 1**. Before continuing, make sure you have it activated:
+
+```bash
+# From the repo root
+source .venv/bin/activate
+python -c "import strands, strands_tools; print('venv OK')"
+```
+
+If `.venv/` doesn't exist or the import errors, re-run Setup Step 1:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r part2_map_agent/requirements.txt
+```
+
+`./run.sh` auto-sources `.venv/bin/activate` for each invocation, but the venv
+itself must already exist. Without it you'll see `ModuleNotFoundError: No
+module named 'strands_tools'` (or similar) when the agent starts.
 
 ### Step 1 — Navigate to the agent and understand the skills (5 min)
 
