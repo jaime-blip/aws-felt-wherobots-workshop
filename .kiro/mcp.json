@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "wherobots": {
-      "command": "uvx",
-      "args": ["wherobots-mcp"],
-      "env": {
-        "WHEROBOTS_API_KEY": "${WHEROBOTS_API_KEY}"
+      "url": "https://api.cloud.wherobots.com/mcp/",
+      "type": "http",
+      "headers": {
+        "x-api-key": "${WHEROBOTS_API_KEY}"
       }
     },
     "felt": {
