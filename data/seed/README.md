@@ -3,6 +3,34 @@
 This folder contains scripts and CSV exports used to seed the Aurora PostgreSQL
 instance for the AWS Geospatial Workshop.
 
+## Default path: CloudFormation auto-seed
+
+When you deploy `infrastructure/cloudformation.yaml`, a Lambda-backed custom
+resource (`AuroraSeed`) automatically:
+
+1. Enables `postgis`, `postgis_raster`, and `aws_s3` extensions
+2. Creates the `workshop` schema and `workshop.insurance_exposure` table
+3. Bulk-loads `workshop.insurance_exposure` from a public S3 object via
+   `aws_s3.table_import_from_s3` (the file is `Content-Encoding: gzip`,
+   so Aurora streams + decompresses it server-side)
+
+Default seed source:
+`s3://aws-felt-wherobots-workshop-755035179626/seed/insurance_exposure.csv.gz`
+
+To refresh that file from a populated source DB, set `AURORA_DSN` and run
+`./scripts/upload_seed_to_s3.sh` — it dumps the table, gzips it, and reuploads
+with the right metadata. Bump `SeedVersion` on a CFN update to re-trigger the
+import (or set `--parameter-overrides SeedDataKey=...` to point at a new key).
+
+The remaining gold tables (`cre_risk`, `capital_markets_signals`,
+`energy_asset_risk`) are still produced by Part 1's Wherobots pipeline.
+
+## Manual path: scripts in this folder
+
+The `export_gold_tables.py` / `import_tables.py` pair is for local dev when
+you want to reseed an Aurora cluster outside CloudFormation (or seed all four
+gold tables, not just `insurance_exposure`).
+
 ## Tables
 
 | Table | Description |

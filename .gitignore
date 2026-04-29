@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 data/*.geojson
 data/*.parquet
+data/*.csv.gz
 data/seed/*.csv
 data/seed/*.sql
 .DS_Store

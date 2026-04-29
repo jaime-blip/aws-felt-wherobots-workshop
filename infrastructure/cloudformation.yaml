@@ -41,6 +41,34 @@ Parameters:
     Default: workshop
     Description: Default database name
 
+  SeedVersion:
+    Type: String
+    Default: '1'
+    Description: >
+      Bump this value (e.g. 1 → 2) to re-run the Aurora seed Lambda on a stack
+      update. The seed enables PostGIS, creates the `workshop` schema, and
+      bulk-loads workshop.insurance_exposure from the S3 seed file below.
+
+  SeedDataBucket:
+    Type: String
+    Default: aws-felt-wherobots-workshop-755035179626
+    Description: >
+      S3 bucket holding the workshop seed data (publicly readable). The Aurora
+      cluster's S3-import role gets s3:GetObject on this bucket.
+
+  SeedDataKey:
+    Type: String
+    Default: seed/insurance_exposure.csv.gz
+    Description: >
+      S3 key for the workshop.insurance_exposure seed file. Must be a gzipped
+      CSV with `Content-Encoding: gzip` metadata so aws_s3.table_import_from_s3
+      decompresses on the fly.
+
+  SeedDataRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region of the seed bucket.
+
 Resources:
   # ════════════════════════════════════════════════════════════════
   # VPC & Networking
@@ -212,9 +240,40 @@ Resources:
       VpcSecurityGroupIds:
         - !Ref AuroraSecurityGroup
       StorageEncrypted: true
+      # Data API — used by the seed Lambda below to run SQL against Aurora
+      # without needing a VPC-attached Lambda or psycopg2 layer.
+      EnableHttpEndpoint: true
+      # Lets aws_s3.table_import_from_s3 read from the seed bucket without
+      # passing creds inline (the cluster assumes this role).
+      AssociatedRoles:
+        - RoleArn: !GetAtt AuroraS3ImportRole.Arn
+          FeatureName: s3Import
       Tags:
         - Key: Name
           Value: geospatial-workshop-aurora
+
+  AuroraS3ImportRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadSeedBucket
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${SeedDataBucket}'
+                  - !Sub 'arn:aws:s3:::${SeedDataBucket}/*'
 
   # Instance-level parameter group — tuned for PostGIS / large-join analytics.
   # These params are instance-scoped on Aurora PG 16 (not cluster-scoped),
@@ -244,6 +303,182 @@ Resources:
       DBParameterGroupName: !Ref AuroraInstanceParams
       Engine: aurora-postgresql
       PubliclyAccessible: true
+
+  # ════════════════════════════════════════════════════════════════
+  # Aurora Seed — runs once on stack create (and on SeedVersion bump).
+  # Uses the RDS Data API so the Lambda doesn't need VPC config or psycopg2.
+  # Idempotent: all statements use IF NOT EXISTS.
+  # ════════════════════════════════════════════════════════════════
+
+  AuroraSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Aurora master credentials for the seed Lambda's Data API calls
+      SecretString: !Sub '{"username":"${DBMasterUsername}","password":"${DBMasterPassword}"}'
+
+  SeedFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SeedDataApiAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref AuroraSecret
+
+  SeedFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      # Generous: the bulk-load is server-side inside Aurora but the Data API
+      # call is synchronous and ~1M rows can take several minutes.
+      Timeout: 900
+      Role: !GetAtt SeedFunctionRole.Arn
+      Environment:
+        Variables:
+          CLUSTER_ARN: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}'
+          SECRET_ARN: !Ref AuroraSecret
+          DB_NAME: !Ref DBName
+          SEED_BUCKET: !Ref SeedDataBucket
+          SEED_KEY: !Ref SeedDataKey
+          SEED_REGION: !Ref SeedDataRegion
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import time
+          import urllib.request
+          import boto3
+          from botocore.exceptions import ClientError
+
+          rds = boto3.client('rds-data')
+
+          INSURANCE_EXPOSURE_DDL = """
+          CREATE TABLE IF NOT EXISTS workshop.insurance_exposure (
+              asset_id              text,
+              geometry              geometry,
+              building_class        text,
+              wildfire_factor       double precision,
+              flood_factor          double precision,
+              severe_weather_factor double precision,
+              risk_score            double precision,
+              risk_tier             text,
+              exposure_delta        double precision,
+              triage_priority       integer,
+              relative_risk_band    text,
+              score_explanation     jsonb,
+              weather_window_start  date,
+              weather_window_end    date,
+              computed_at           timestamptz
+          )
+          """
+
+          # Structural seed (always runs; idempotent).
+          STRUCTURE_STATEMENTS = [
+              "CREATE EXTENSION IF NOT EXISTS postgis",
+              "CREATE EXTENSION IF NOT EXISTS postgis_raster",
+              "CREATE EXTENSION IF NOT EXISTS aws_s3 CASCADE",
+              "CREATE SCHEMA IF NOT EXISTS workshop",
+              "GRANT ALL ON SCHEMA workshop TO PUBLIC",
+              INSURANCE_EXPOSURE_DDL,
+          ]
+
+          def execute(sql, retries=10, timeout_s=600):
+              # Aurora Serverless v2 may be paused/scaling on first hit;
+              # the Data API surfaces this as DatabaseResumingException.
+              for attempt in range(retries):
+                  try:
+                      return rds.execute_statement(
+                          resourceArn=os.environ['CLUSTER_ARN'],
+                          secretArn=os.environ['SECRET_ARN'],
+                          database=os.environ['DB_NAME'],
+                          sql=sql,
+                          continueAfterTimeout=True,
+                      )
+                  except ClientError as e:
+                      code = e.response.get('Error', {}).get('Code', '')
+                      if code in ('DatabaseResumingException', 'BadRequestException') and attempt < retries - 1:
+                          time.sleep(min(30, 2 ** attempt))
+                          continue
+                      raise
+
+          def load_insurance_exposure():
+              # Skip the bulk load if the table already has rows (idempotent re-runs).
+              r = execute("SELECT count(*) AS n FROM workshop.insurance_exposure")
+              n = r['records'][0][0].get('longValue', 0)
+              if n > 0:
+                  print(f'insurance_exposure already has {n:,} rows — skipping import')
+                  return
+              bucket = os.environ['SEED_BUCKET']
+              key = os.environ['SEED_KEY']
+              region = os.environ['SEED_REGION']
+              print(f'Importing s3://{bucket}/{key} → workshop.insurance_exposure')
+              import_sql = (
+                  "SELECT aws_s3.table_import_from_s3("
+                  "'workshop.insurance_exposure', "
+                  "'', "
+                  "'(format csv, header true)', "
+                  f"'{bucket}', '{key}', '{region}'"
+                  ")"
+              )
+              r = execute(import_sql, timeout_s=900)
+              print(f'Import result: {r.get("records")}')
+
+          def send(event, context, status, reason=None):
+              body = json.dumps({
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch log stream {context.log_stream_name}',
+                  'PhysicalResourceId': event.get('PhysicalResourceId') or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': {},
+              }).encode('utf-8')
+              req = urllib.request.Request(event['ResponseURL'], data=body, method='PUT')
+              req.add_header('Content-Type', '')
+              urllib.request.urlopen(req).read()
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      send(event, context, 'SUCCESS')
+                      return
+                  for sql in STRUCTURE_STATEMENTS:
+                      print(f'>> {sql.splitlines()[0][:80]} ...')
+                      execute(sql)
+                  load_insurance_exposure()
+                  send(event, context, 'SUCCESS')
+              except Exception as e:
+                  print(f'SEED FAILED: {e!r}')
+                  send(event, context, 'FAILED', reason=str(e)[:1000])
+
+  AuroraSeed:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: AuroraInstance
+    Properties:
+      ServiceToken: !GetAtt SeedFunction.Arn
+      SeedVersion: !Ref SeedVersion
+      # Bake bucket+key into the resource so the custom resource re-fires when
+      # the seed source changes (CFN treats prop changes as updates).
+      SeedBucket: !Ref SeedDataBucket
+      SeedKey: !Ref SeedDataKey
 
 # ════════════════════════════════════════════════════════════════
 # Outputs
