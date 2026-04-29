@@ -8,7 +8,6 @@ data/seed/*.csv
 data/seed/*.sql
 .DS_Store
 .mcp.json
-CLAUDE.md
 transcripts/
 tmp/screenshots/*.png
 .playwright-mcp/
