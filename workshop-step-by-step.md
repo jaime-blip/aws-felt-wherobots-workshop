@@ -122,7 +122,7 @@ If you're using Kiro, install the Wherobots extension for integrated catalog bro
 3. The extension auto-configures the MCP server and Data Hub sidebar
 
 To connect notebooks to Wherobots compute (needed for Part 1):
-1. Wherobots sidebar → **Create Workspace** → set region and instance size → **Start**
+1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Medium** for `bronze-to-silver`, **Small** for `silver-to-gold`) → **Start**
 2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
 3. Code now executes on Wherobots Cloud (Sedona)
 

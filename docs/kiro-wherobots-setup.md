@@ -66,7 +66,9 @@ This is how you run the Part 1 medallion pipeline notebooks against real Wherobo
 2. Click **Create Workspace**
 3. Configure:
    - **Region**: `us-west-2` (or your preferred region)
-   - **Instance Size**: Choose based on workload (the extension settings let you set a default via `instanceSize`)
+   - **Instance Size**: Choose based on workload. For this workshop's reference notebooks:
+     - `bronze-to-silver.ipynb` → **Medium** (raster zonal stats + spatial KNN benefit from extra memory)
+     - `silver-to-gold.ipynb` → **Small** (SQL-only on pre-joined Silver tables — no spatial joins or rasters)
 4. Click **Start** — this provisions a remote Sedona runtime
 
 ### Connect Your Notebook
