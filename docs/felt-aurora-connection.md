@@ -6,7 +6,7 @@ workshop tables and create maps via the Felt API.
 
 ## Prerequisites
 
-- A deployed Aurora PostgreSQL cluster (see `infrastructure/README.md`)
+- A deployed Aurora PostgreSQL cluster (see `deploy-aurora/README.md`)
 - Aurora must be publicly accessible (the workshop CloudFormation template
   configures this by default)
 - A Felt account with API access

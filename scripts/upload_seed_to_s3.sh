@@ -7,14 +7,14 @@
 # Usage:
 #   AURORA_DSN=postgresql://... ./scripts/upload_seed_to_s3.sh
 #
-# The destination defaults match infrastructure/cloudformation.yaml's
+# The destination defaults match deploy-aurora/cloudformation.yaml's
 # SeedDataBucket / SeedDataKey parameters.
 
 set -euo pipefail
 
 BUCKET="${SEED_BUCKET:-aws-felt-wherobots-workshop-755035179626}"
 KEY="${SEED_KEY:-seed/insurance_exposure.csv.gz}"
-LOCAL="${LOCAL_FILE:-data/insurance_exposure.csv.gz}"
+LOCAL="${LOCAL_FILE:-tmp/insurance_exposure.csv.gz}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"

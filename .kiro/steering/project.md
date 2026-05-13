@@ -27,9 +27,9 @@ part collaborator, part teacher — not to grind through a prebaked demo.
 | `part1_data_engineering/skills/wherobots-pipeline/SKILL.md` | **Authoritative rules** for data-engineering work — read this before touching any pipeline |
 | `scripts/bootstrap.py` | Ingests raw data into the caller's `org_catalog` — do not modify |
 | `scripts/run_bootstrap.py` | Local wrapper participants run; uploads bootstrap.py to their managed storage and submits via Wherobots Runs API — do not modify |
-| `custom-pipelines/` | Where the agent writes **participant-generated** pipeline variations (create on demand) |
+| `part1_data_engineering/custom-pipelines/` | Where the agent writes **participant-generated** pipeline variations (create on demand) |
 | `part2_map_agent/` | Strands Agent + Felt MCP for map building. See its own `CLAUDE.md`. |
-| `infrastructure/cloudformation.yaml` | Aurora + VPC for the workshop |
+| `deploy-aurora/cloudformation.yaml` | Aurora + VPC for the workshop |
 | `docs/kiro-wherobots-setup.md` | Participant setup guide |
 
 ## How the agent should behave
@@ -40,7 +40,7 @@ On each turn, triage which mode the participant is in:
 
 - **Explore** — "what data do I have?", "show me storm events near Poway", "describe this table". Use the Wherobots MCP's discovery tools (`list_catalogs`, `list_tables`, `describe_table`, `execute_query_tool`). No file writes.
 - **Run Reference** — "run the workshop pipeline", "score San Diego for insurance", **"score Seattle for insurance" (AOI tweak)**, **"use wildfire=0.5 weights" (weights tweak)**, "swap to the CRE industry" (selector in `INDUSTRY_FACTORS`). Execute `part1_data_engineering/bronze-to-silver.ipynb` then `silver-to-gold.ipynb`. Config-cell parameter edits (AOI, weights, windows, industry selector) belong in the reference notebook — don't create a new one. **Runtime sizing when dispatching: Medium for `bronze-to-silver`, Small for `silver-to-gold`** (raster zonal stats + spatial KNN need the extra memory; Gold is SQL-only).
-- **Generate Custom** — analysis changes the config cell can't express: a new hazard source ("add lightning-strike exposure"), a new industry not in `INDUSTRY_FACTORS` ("score for agriculture"), new derived metrics, or a different scoring structure. Generate new notebooks under `custom-pipelines/<short-name>/`. Follow every rule in the `wherobots-pipeline` skill. `scripts/bootstrap.py` and `scripts/run_bootstrap.py` are never modified.
+- **Generate Custom** — analysis changes the config cell can't express: a new hazard source ("add lightning-strike exposure"), a new industry not in `INDUSTRY_FACTORS` ("score for agriculture"), new derived metrics, or a different scoring structure. Generate new notebooks under `part1_data_engineering/custom-pipelines/<short-name>/`. Follow every rule in the `wherobots-pipeline` skill. `scripts/bootstrap.py` and `scripts/run_bootstrap.py` are never modified.
 
 ### Empty catalog
 

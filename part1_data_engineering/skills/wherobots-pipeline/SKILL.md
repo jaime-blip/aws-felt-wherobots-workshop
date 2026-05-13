@@ -113,7 +113,7 @@ lens"* insight.
 Participant wants an **analysis change** that the config cell can't
 express: a new hazard source (lightning, air quality), a new industry
 not in `INDUSTRY_FACTORS`, new derived metrics, or a different scoring
-structure. Generate new notebooks under `custom-pipelines/<short-name>/`
+structure. Generate new notebooks under `part1_data_engineering/custom-pipelines/<short-name>/`
 (create the directory if missing). Follow the Workflow below and every
 rule in this skill.
 
@@ -163,7 +163,7 @@ notebooks:
 Config-cell parameter edits in those notebooks (AOI, weights, windows,
 industry selector) are the intended use — they're fine. For analysis
 changes (new source, new industry logic, new metrics), copy the
-notebook into `custom-pipelines/<name>/` and edit the copy.
+notebook into `part1_data_engineering/custom-pipelines/<name>/` and edit the copy.
 
 Never modify:
 
@@ -295,7 +295,7 @@ with tradeoffs**, not a pre-made decision (rule 5). Wait for approval.
 ### Phase 4 — Generate Documentation
 
 Produce `architecture.md` and `data_dictionary.md` alongside the generated
-notebooks under `custom-pipelines/<name>/`. These are the participant's
+notebooks under `part1_data_engineering/custom-pipelines/<name>/`. These are the participant's
 reference while notebooks are generated and run.
 
 ### Phase 5 — Generate Notebooks

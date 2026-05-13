@@ -117,10 +117,15 @@ Run the Map Builder Agent:
 │   │   └── felt-mapping/              # Skill: Felt map creation + FSL styling
 │   └── evals/                         # LLM-as-judge evaluation framework
 │
-├── data/
-│   ├── burn_probability_rasters/      # USFS wildfire raster data
-│   ├── flood_rasters/                 # OPERA DSWx-S1 flood GeoTIFFs
-│   └── seed/                          # Export script for CloudFormation seeding
+├── deploy-aurora/
+│   ├── cloudformation.yaml            # Aurora + VPC + Bedrock IAM (provisioning)
+│   └── README.md                      # Deploy / tear-down instructions
+│
+├── scripts/
+│   ├── bootstrap.py                   # Wherobots org_catalog ingest (Bronze)
+│   ├── run_bootstrap.py               # Local wrapper that submits bootstrap.py
+│   ├── upload_seed_to_s3.sh           # Refreshes the Aurora seed file in S3
+│   └── dump_gold_tables.py            # Authoring tool: snapshot gold tables → CSV + DDL
 │
 └── tmp/                               # Dev-only scripts (not part of workshop)
 ```

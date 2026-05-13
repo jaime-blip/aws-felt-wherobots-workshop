@@ -46,11 +46,11 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 | **Felt API token** | Felt → Settings → Integrations — starts with `felt_pat_...` | Part 2 |
 | **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) | Part 1 |
 | **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
-| **AWS account** | Pre-provisioned for the workshop | Part 1 + 2 |
-| **Aurora PostgreSQL** | Pre-provisioned for the workshop | Part 1 + 2 |
-| **AWS Bedrock model access** | Pre-provisioned (Claude Opus 4.7 in `us-east-1`) | Part 2 |
+| **AWS account** | Your own AWS account with admin/CFN permissions | Part 1 + 2 |
+| **Aurora PostgreSQL** | Deployed by you in **Step 2** via CloudFormation | Part 1 + 2 |
+| **AWS Bedrock model access** | Enable Claude Opus 4.7 in `us-east-1` (Bedrock console → Model access) | Part 2 |
 
-> **Note:** For instructor-led workshops, API keys and AWS accounts are pre-provisioned. For self-service, follow the links above to create accounts.
+> **Note:** Each participant deploys their own AWS stack. The CloudFormation template in `deploy-aurora/cloudformation.yaml` provisions Aurora, the VPC, and the Bedrock IAM role. Follow the links above to create the Felt and Wherobots accounts.
 
 ### Software
 
@@ -65,7 +65,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 
 ---
 
-## Setup (~10 min)
+## Setup (~25 min)
 
 ### Step 1 — Clone & install
 
@@ -88,13 +88,66 @@ Verify the install:
 python -c "import strands, strands_tools, felt_python; print('venv ready')"
 ```
 
-### Step 2 — Configure credentials
+### Step 2 — Deploy the AWS stack (~10 min)
+
+Each participant deploys their own Aurora cluster, VPC, and Bedrock IAM role.
+The stack also auto-seeds `workshop.insurance_exposure` so Part 2 has data to
+query before Part 1's pipeline finishes.
+
+> **Before deploying:** make sure Bedrock model access for **Claude Opus 4.7**
+> (`anthropic.claude-opus-4-7`) is enabled in `us-east-1`. Bedrock console →
+> *Model access* → *Manage model access*.
+
+Deploy the stack (pick a strong password — you'll put it in `.env` next step):
+
+```bash
+aws cloudformation deploy \
+  --template-file deploy-aurora/cloudformation.yaml \
+  --stack-name geospatial-workshop \
+  --parameter-overrides \
+      DBMasterUsername=workshop_admin \
+      DBMasterPassword='ChangeMe-StrongPassword123!' \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-west-2
+```
+
+Aurora Serverless v2 takes ~8–10 minutes to come up. Once `deploy` returns,
+grab the outputs:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name geospatial-workshop \
+  --region us-west-2 \
+  --query 'Stacks[0].Outputs' \
+  --output table
+```
+
+Note the `AuroraEndpoint` value — you'll need it in Step 3.
+
+> **Verify the auto-seed (optional):** the stack runs a Lambda that creates the
+> `workshop` schema and bulk-loads `workshop.insurance_exposure` from S3. To
+> confirm:
+>
+> ```bash
+> psql "postgresql://workshop_admin:<PASSWORD>@<AuroraEndpoint>:5432/workshop" \
+>   -c "SELECT count(*) FROM workshop.insurance_exposure;"
+> ```
+>
+> Expect ~358,985 rows. If empty, see `deploy-aurora/README.md` (the `AuroraSeed` Lambda log in CloudWatch will explain why).
+
+> **Region note:** The template defaults to `us-west-2` for Aurora; the `.env`
+> below sets `us-east-1` for Bedrock. They don't need to match — Bedrock is
+> called over the public API.
+
+> **Tear-down:** `aws cloudformation delete-stack --stack-name geospatial-workshop --region us-west-2`
+
+### Step 3 — Configure credentials
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials (provided by the instructor or from your own accounts):
+Edit `.env` with the Aurora endpoint from Step 2 plus your other credentials:
 
 ```bash
 # Wherobots Cloud
@@ -113,7 +166,7 @@ AWS_PROFILE=default
 AWS_DEFAULT_REGION=us-east-1
 ```
 
-### Step 3 — Set up Kiro with Wherobots extension (recommended)
+### Step 4 — Set up Kiro with Wherobots extension (recommended)
 
 If you're using Kiro, install the Wherobots extension for integrated catalog browsing, AI-assisted notebook authoring, and remote compute:
 
@@ -128,7 +181,7 @@ To connect notebooks to Wherobots compute (needed for Part 1):
 
 > **Full guide:** [`docs/kiro-wherobots-setup.md`](docs/kiro-wherobots-setup.md) covers installation, MCP config, runtime connection, Data Hub, and troubleshooting.
 
-### Step 4 — Configure MCP servers
+### Step 5 — Configure MCP servers
 
 Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 
@@ -151,7 +204,7 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 }
 ```
 
-### Step 5 — Connect Felt to Aurora PostgreSQL
+### Step 6 — Connect Felt to Aurora PostgreSQL
 
 This step creates a **Felt data source** so the Map Builder Agent (Part 2) can query Aurora and create maps directly.
 
@@ -175,7 +228,7 @@ The agent resolves this source by name at runtime via the Felt API — no source
 >
 > **Network note:** Felt connects from its infrastructure to your Aurora. For the workshop, Aurora is publicly accessible with the correct security group rules. For production deployments, see `docs/felt-aurora-connection.md` for network considerations.
 
-### Step 6 — Verify connections
+### Step 7 — Verify connections
 
 **Aurora PostgreSQL:**
 ```bash
