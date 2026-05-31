@@ -1,6 +1,7 @@
 strands-agents
 strands-agents-bedrock
 strands-agents-tools
+mcp
 felt-python
 geopandas
 pandas

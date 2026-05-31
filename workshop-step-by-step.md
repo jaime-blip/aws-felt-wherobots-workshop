@@ -441,12 +441,12 @@ You should see:
 
 Now let's make the data visual. You'll run an AI agent that turns natural language prompts into interactive Felt maps. The agent:
 
-1. Reads **skill documents** (.md files) that teach it how to use PostGIS and the Felt API
-2. Uses **Amazon Bedrock (Claude)** to interpret prompts and generate Python code
-3. Executes code via **python_repl** to query Aurora and create styled Felt maps
-4. Returns a shareable map URL
+1. Connects to the **Felt MCP server** (`https://felt.com/mcp`) for map operations
+2. Uses **Amazon Bedrock (Claude)** to interpret prompts and orchestrate MCP tool calls
+3. Queries Aurora directly via Felt's data source connection
+4. Returns a shareable map URL with an inline preview
 
-This is NOT a traditional tool-calling agent with hardcoded functions — it reads documentation, writes code, and executes it.
+The agent uses MCP tools directly — no code generation required for standard workflows. For complex transforms, it falls back to `python_repl`.
 
 ### Architecture
 
@@ -458,18 +458,18 @@ User: "Show me buildings with high wildfire risk near Poway"
         │  Strands Agent        │
         │  (Bedrock Claude)     │
         │                       │
-        │  Reads: skills/*.md   │
-        │  - aurora-postgis     │
-        │  - felt-mapping       │
+        │  Tools: Felt MCP      │
+        │         python_repl   │
         └───────────┬───────────┘
-                    │ generates Python
+                    │ MCP tool calls
                     ▼
         ┌───────────────────────┐
-        │  python_repl          │
+        │  Felt MCP Server      │
+        │  https://felt.com/mcp │
         │                       │
-        │  1. psycopg2 → Aurora │
-        │  2. felt_python → Map │
-        │  3. FSL → Styling     │
+        │  → Aurora (SQL)       │
+        │  → Map creation       │
+        │  → FSL styling        │
         └───────────┬───────────┘
                     │
                     ▼
@@ -499,86 +499,118 @@ pip install -r part2_map_agent/requirements.txt
 itself must already exist. Without it you'll see `ModuleNotFoundError: No
 module named 'strands_tools'` (or similar) when the agent starts.
 
-### Step 1 — Navigate to the agent and understand the skills (5 min)
+### Step 1 — Navigate to the agent and understand the tools (5 min)
 
 ```bash
 cd part2_map_agent
 ```
 
-The agent has two skills in `skills/`:
+The agent uses **Felt MCP tools** as its primary interface:
 
-**`aurora-postgis/SKILL.md`** — Teaches the agent how to:
-- Connect to Aurora PostgreSQL via `psycopg2`
-- Discover spatial tables and columns
-- Run PostGIS spatial queries (bounding box, distance, joins)
+| MCP Tool | Purpose |
+|----------|---------|
+| `list_data_sources` | Find the Aurora database connection |
+| `create_map` | Create a new Felt map |
+| `create_layer_from_data_source` | Add a layer via SQL query |
+| `poll_layer_processing_status` | Wait for layer to finish |
+| `generate_fsl` | AI-powered style generation |
+| `update_layer_properties` | Apply styles to layers |
+| `render_map` | Show inline map preview |
 
-**`felt-mapping/SKILL.md`** — Teaches the agent how to:
-- Create Felt maps with `felt_python.create_map()`
-- Add source layers from Aurora with SQL queries
-- Apply FSL (Felt Style Language) for categorical and numeric styling
-- Use helpers: `wait_for_layer()`, `categorical_style()`, `numeric_style()`
+The agent also has **fallback skills** in `skills/`:
 
-The agent reads these skills at runtime, then generates and executes the appropriate Python code. No hardcoded tool wrappers.
+**`felt-mapping/SKILL.md`** — Documents the MCP tool workflow and SQL patterns
+
+**`aurora-postgis/SKILL.md`** — Fallback for direct psycopg2 access when MCP fails
 
 ### Step 2 — Run the agent: your first map (10 min)
 
-```bash
-./run.sh "Show me buildings with elevated and high insurance risk in San Diego, colored by risk tier"
-```
+Start the agent in **interactive mode**:
 
-Or interactive mode:
 ```bash
 ./run.sh
 ```
 
-**What happens behind the scenes:**
-1. The agent knows the full schema (baked into its system prompt)
-2. It activates the `felt-mapping` skill for styling instructions
-3. Generates Python that:
-   - Creates a new Felt map centered on San Diego
-   - Adds a source layer with SQL: `SELECT * FROM workshop.insurance_exposure WHERE risk_tier IN ('elevated','high') LIMIT 5000`
-   - Waits for the layer to process
-   - Applies categorical styling on `risk_tier` (red = high, orange = elevated)
-   - Renames the layer to something meaningful
-4. Returns the Felt map URL
+The agent will prompt you for what to map. Try this first prompt — it builds a single-layer **triage map** of the buildings an underwriter should look at first:
 
-Open the URL — you should see ~141 building polygons clustered in the hills east of Poway and Ramona.
+> **Suggested prompt:** *"As an insurance underwriter, show me the buildings I should review first: map the high and critical risk buildings across San Diego County, colored by risk tier — red for high, dark red for critical. Add a popup showing each building's risk score and its wildfire, flood, and severe-weather factors so I can see what's driving the risk."*
 
-> **Note:** Risk tiers in the data are: `low`, `moderate`, `elevated`, `high`. There is no "critical" tier.
+**What happens behind the scenes (MCP tool calls):**
+1. `list_data_sources` → finds the Aurora PostgreSQL connection
+2. `create_map` → creates a new Felt map over San Diego County
+3. `create_layer_from_data_source` → SQL query for the high + critical risk buildings
+4. `poll_layer_processing_status` → waits for the layer to finish
+5. `generate_fsl` → builds a categorical style for `risk_tier` plus the factor popup
+6. `update_layer_properties` → applies the style
+7. `render_map` → shows inline preview + returns URL
 
-### Step 3 — Try more prompts (15 min)
+**What you'll see:** 21,501 buildings — and they rake across the **eastern backcountry** (Poway, Ramona, Julian), the wildland-urban interface, *not* the coast. The serious hazard sits at the county's edges. Click a dark-red (critical) building and you'll see a high **wildfire factor** driving it; closer to the coast the risk is driven more by flood and severe weather. Wildfire is the escalator that pushes a building into the critical tier.
 
-Each prompt below shows what the agent does under the hood so you can follow along:
+| Risk Tier | Count | On this map |
+|-----------|------:|:-----------:|
+| Critical  | 2,385 | 🟥 yes |
+| High      | 19,116 | 🔴 yes |
+| Elevated  | 66,271 | — |
+| Moderate  | 920,415 | — |
+| Low       | 27,119 | — |
+
+Of ~1M buildings, only **21,501 (2%)** land in the high/critical tiers — that focus is the point of a triage map.
+
+> **Tip:** The popup is already wired up — click any building to see its risk score and the wildfire / flood / severe-weather factors behind it. Notice how wildfire climbs as you move inland.
+>
+> **Why no "context" buffer?** A buffer circle around downtown would highlight the *safe* urban core — the high/critical buildings are 20–50 miles east of it, so the story is in the backcountry, not a ring around the city. Single, focused layers make clearer first maps. (You'll use spatial buffers later, in Step 3.)
+
+### Step 3 — Explore with more prompts (15 min)
+
+Continue in **interactive mode** — the agent remembers context from previous maps. Try these prompts to explore different perspectives:
+
+---
 
 **Different industry, same buildings:**
-```bash
-./run.sh "Create a map showing CRE risk scores as a gradient from green to red"
-```
-> *Queries `workshop.cre_risk`. Applies `numeric_style("risk_score")` to create a continuous color ramp. Compare this with the insurance map — the same buildings get different colors because CRE weights severe weather more heavily.*
+
+> *"Now create a map showing CRE risk scores as a gradient from green to red. How does this compare to the insurance view?"*
+
+The agent queries `workshop.cre_risk` and applies a numeric gradient. Compare with your insurance map — the same buildings get different colors because CRE weights severe weather more heavily (0.35 vs 0.20).
+
+---
 
 **Wildfire-specific view:**
-```bash
-./run.sh "Map energy infrastructure with high outage probability, styled by vegetation encroachment risk"
-```
-> *Queries `workshop.energy_infra_risk WHERE outage_probability > 0.5`. Styles by `vegetation_encroachment_risk`. Shows buildings near dry brush zones in eastern San Diego where power lines meet wildfire fuel.*
+
+> *"Show me energy infrastructure with high outage probability. Color by vegetation encroachment risk."*
+
+Queries `workshop.energy_infra_risk WHERE outage_probability > 0.5`. Shows buildings near dry brush zones where power lines meet wildfire fuel — the ignition risk hotspots.
+
+---
 
 **Spatial query (PostGIS in action):**
-```bash
-./run.sh "Show me the 100 highest-risk buildings within 5km of downtown San Diego"
-```
-> *Triggers a `ST_DWithin` spatial query on `workshop.insurance_exposure`, filtering to a 5km radius around downtown (approx. -117.16, 32.72). Expect ~100 markers in the urban core — mostly moderate risk from severe weather, not wildfire.*
+
+> *"What are the 100 highest-risk buildings within 5km of downtown San Diego? Show them on a map."*
+
+Triggers a `ST_DWithin` spatial query. Expect ~100 markers in the urban core — mostly moderate risk from severe weather, not wildfire. Downtown is relatively safe.
+
+---
 
 **Multi-layer comparison:**
-```bash
-./run.sh "Create a map with two layers: high insurance risk buildings in red, and the same buildings showing their CRE risk tier"
-```
-> *Creates one map, adds two source layers from different Gold tables. Uses `wait_for_layer(map_id, expect_count=N)` to sync each layer. Shows how the same physical buildings are scored differently by different industries.*
+
+> *"Create a map with two layers: insurance risk tier and CRE risk tier for the same buildings. I want to see where they disagree."*
+
+Creates one map with two source layers from different Gold tables. Shows how the same physical buildings are scored differently by different industries.
+
+---
 
 **The wildfire story:**
-```bash
-./run.sh "Map all buildings near Poway with wildfire_factor above 0.3, styled by wildfire_factor as a heat gradient"
-```
-> *Queries `workshop.insurance_exposure WHERE wildfire_factor > 0.3`. These are the 159 buildings at the wildland-urban interface. The gradient shows which specific buildings face the highest burn probability — and you can overlay this with the burn probability raster to see why.*
+
+> *"Map all buildings near Poway with wildfire_factor above 0.3. Use a heat gradient to show severity."*
+
+These are the ~159 buildings at the wildland-urban interface. The gradient shows which specific buildings face the highest burn probability — the 2003 Cedar Fire and 2007 Witch Creek Fire swept through this exact area.
+
+---
+
+**Custom exploration:**
+
+> *"What would you suggest mapping next based on what we've seen?"*
+
+The agent can recommend queries based on the patterns it's observed. Try asking it to find anomalies, outliers, or interesting spatial clusters.
 
 ### Step 4 — Explore the Felt map (5 min)
 
