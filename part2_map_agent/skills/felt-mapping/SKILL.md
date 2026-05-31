@@ -1,243 +1,187 @@
 ---
 name: felt-mapping
-description: Create interactive Felt maps from spatial data. Covers map creation, SQL source layers from PostgreSQL, FSL styling (categorical, numeric, heatmaps, icons, labels), layer polling, and map verification. Use when building or styling Felt maps.
-allowed-tools: python_repl file_read
+description: Create interactive Felt maps using the Felt MCP tools. Covers map creation, SQL-backed layers from Aurora PostgreSQL, FSL styling via generate_fsl, and layer management.
+allowed-tools: list_data_sources create_map create_layer_from_data_source poll_layer_processing_status generate_fsl update_layer_properties render_map get_tabular_data_from_data_source
 ---
 
-# Felt Mapping Skill
+# Felt Mapping Skill (MCP)
 
-Create interactive web maps using the `felt-python` library and FSL (Felt Style Language).
+Create interactive web maps using the Felt MCP tools directly.
 
-For the full API reference, see [references/FULL_REFERENCE.md](references/FULL_REFERENCE.md).
+## Available MCP Tools
 
-## Key Concepts
+| Tool | Purpose |
+|------|---------|
+| `list_data_sources` | Find connected database source IDs (look for PostgreSQL) |
+| `create_map` | Create a new map with title, center, zoom, basemap |
+| `create_layer_from_data_source` | Add a layer via SQL query against Aurora |
+| `get_tabular_data_from_data_source` | Query data without creating a layer (for exploration) |
+| `poll_layer_processing_status` | Wait for layer processing to complete |
+| `generate_fsl` | AI-powered FSL style generation |
+| `update_layer_properties` | Apply FSL style, rename layer, set caption |
+| `render_map` | Show inline preview (call LAST after all edits) |
 
-- **Source layers**: Connect to a PostgreSQL database and query data via SQL
-- **FSL (Felt Style Language)**: JSON-based styling (categorical, numeric, heatmap, icons, labels)
-- **Polling**: Layers process asynchronously — MUST wait for `completed` before styling
+## Standard Workflow
 
-## Environment
+### 1. Find the Data Source
 
-```python
-# Pre-loaded in python_repl:
-TOKEN = os.environ["FELT_API_TOKEN"]
-SOURCE_ID  # resolved at agent startup from FELT_SOURCE_NAME (default "workshop-db")
-
-# felt_python functions (always pass api_token=TOKEN):
-from felt_python import create_map, add_source_layer, list_layers, update_layer_style, list_library_layers, duplicate_layers
-
-# Helper functions:
-from felt_helpers import wait_for_layer, categorical_style, numeric_style, find_library_layers, add_library_layer
+```
+Call: list_data_sources
+Returns: List of connected databases — find the PostgreSQL one (usually "workshop-db")
+Save: data_source_id for subsequent calls
 ```
 
-## Workflow
+### 2. Create a Map
 
-### 1. Create a Map
-
-```python
-m = create_map(title="My Map", api_token=TOKEN)
-map_id, map_url = m["id"], m["url"]
-print(f"Map: {map_url}")
+```
+Call: create_map
+Parameters:
+  - title: "My Map Title"
+  - latitude: 32.7157  (San Diego center)
+  - longitude: -117.1611
+  - zoom: 10
+  - basemap: "light" (or "dark", "satellite", "default")
+Returns: map_id, url
 ```
 
-### 2. Add a SQL Source Layer
+### 3. Add a SQL Layer
 
-```python
-params = {
-    "from": "sql",
-    "source_id": SOURCE_ID,
-    "query": "SELECT * FROM public.my_table"
-}
-add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
+```
+Call: create_layer_from_data_source
+Parameters:
+  - map_id: <from step 2>
+  - data_source_id: <from step 1>
+  - sql_query: "SELECT * FROM workshop.insurance_exposure WHERE risk_tier = 'elevated' LIMIT 10000"
+  - name: "Elevated Risk Buildings"
+Returns: layer_id
 ```
 
-### 3. Wait for Processing (MANDATORY)
+**SQL Requirements:**
+- ALWAYS use `workshop.` schema prefix
+- ALWAYS include geometry column
+- Use LIMIT (max 100,000 rows)
 
-```python
-layer = wait_for_layer(map_id)  # polls every 3s until completed
-layer_id = layer["id"]
+### 4. Wait for Processing
+
+```
+Call: poll_layer_processing_status
+Parameters:
+  - map_id: <from step 2>
+  - layer_id: <from step 3>
+  - wait_seconds: 30
+Returns: status ("completed" or "in_progress" or "failed")
 ```
 
-- Statuses: `processing` → `completed` (or `failed`)
-- Small tables: ~6-9s. Large tables (1000+): 15-30s
-- **Never style before `completed`** — you'll get 422 errors
+Repeat until status is "completed".
 
-### 4. Apply FSL Style
+### 5. Generate Style
 
-```python
-# Categorical (text column)
-style = categorical_style("my_column", top_n=10)
-update_layer_style(map_id=map_id, layer_id=layer_id, style=style, api_token=TOKEN)
-
-# Numeric (number column)
-style = numeric_style("my_number_column", palette="@ylRed")
-update_layer_style(map_id=map_id, layer_id=layer_id, style=style, api_token=TOKEN)
+```
+Call: generate_fsl
+Parameters:
+  - map_id: <from step 2>
+  - layer_id: <from step 3>
+  - geometry_type: "polygon" (or "point", "line")
+  - description: "Categorical coloring by risk_tier. Orange for elevated, red for high, dark red for critical. Include popup with risk_score."
+Returns: FSL style object
 ```
 
-### 5. Verify
+The `generate_fsl` tool inspects the layer's actual data to make informed styling decisions.
 
-```python
-import urllib.request, json
-req = urllib.request.Request(
-    f"https://felt.com/api/v2/maps/{map_id}/layers",
-    headers={"Authorization": f"Bearer {TOKEN}"}
-)
-layers = json.loads(urllib.request.urlopen(req).read())
-for layer in layers:
-    print(f"  {layer['name']}: status={layer['status']}, features={layer.get('metadata',{}).get('feature_count','?')}")
+### 6. Apply Style
+
+```
+Call: update_layer_properties
+Parameters:
+  - map_id: <from step 2>
+  - layer_id: <from step 3>
+  - style: <FSL from step 5>
+  - name: "Risk Buildings" (optional rename)
+  - caption: "Colored by risk tier" (optional)
 ```
 
-## Library Layers (Org Library / Felt Library)
+### 7. Render Map
 
-Raster layers and reference vectors already in the user's Felt library — things
-they see in the UI under **Add Layer → From Library** (e.g. "BP CONUS Burn
-Probability", basemaps, admin boundaries) — are **not** SQL sources and
-**cannot** be added via `add_source_layer`. That endpoint returns 422 on
-library layers. They must be *duplicated* from the library onto the map via
-`felt_python.duplicate_layers`.
-
-Use the `add_library_layer` helper:
-
-```python
-# Resolve by name (case-insensitive substring). Errors if ambiguous.
-layer = add_library_layer(map_id, name="BP CONUS")
-
-# Disambiguate if multiple matches:
-matches = find_library_layers("burn probability")
-for m in matches:
-    print(m["id"], m["name"], m["geometry_type"])
-layer = add_library_layer(map_id, layer_id=matches[0]["id"])
-
-# Control which library to search:
-#   source='workspace' → Org Library only
-#   source='felt'      → Felt's public library only
-#   source='all'       → both (default)
-layer = add_library_layer(map_id, name="California counties", source="felt")
+```
+Call: render_map
+Parameters:
+  - map_id: <from step 2>
+Returns: Inline preview widget + URL
 ```
 
-Under the hood this calls:
-
-```python
-duplicate_layers(
-    duplicate_params=[{
-        "source_layer_id": <library_layer_id>,
-        "destination_map_id": map_id,
-    }],
-    api_token=TOKEN,
-)
-```
-
-The helper polls with `wait_for_layer` until the duplicated layer finishes
-processing, so you can style it immediately afterward. For raster layers,
-styling is typically unnecessary — just add and move on.
-
-**When combining with your own SQL layers**, add the library (raster) layer
-first so it sits underneath as context, then add your SQL layers on top.
+**IMPORTANT:** Call `render_map` as the LAST step. It captures a snapshot at the moment of the call.
 
 ## Multi-Layer Maps
 
-Add layers one at a time. Style each before adding the next:
+Add layers one at a time, waiting for each to complete:
 
-```python
-for table, col in [("public.table1", "col1"), ("public.table2", "col2")]:
-    params = {"from": "sql", "source_id": SOURCE_ID, "query": f"SELECT * FROM {table}"}
-    add_source_layer(map_id=map_id, source_layer_params=params, api_token=TOKEN)
-    layer = wait_for_layer(map_id)
-    update_layer_style(
-        map_id=map_id, layer_id=layer["id"],
-        style=categorical_style(col, top_n=10),
-        api_token=TOKEN
-    )
-    print(f"  Added {table}")
+1. Create map
+2. Add layer 1 → poll → style
+3. Add layer 2 → poll → style
+4. Render map (once, at the end)
+
+## Buffer / Reference Layers
+
+To add a buffer circle around a point, use PostGIS in the SQL query:
+
+```sql
+SELECT
+    'Downtown 10-mile buffer' as name,
+    ST_Buffer(
+        ST_SetSRID(ST_MakePoint(-117.1611, 32.7157), 4326)::geography,
+        16093.44  -- 10 miles in meters
+    )::geometry as geometry
 ```
 
-## FSL Quick Reference
-
-All FSL styles must include `"version": "2.3.1"`.
-
-### Categorical Style
-
-```json
-{
-    "version": "2.3.1",
-    "type": "categorical",
-    "config": {
-        "categoricalAttribute": "column_name",
-        "categories": {"type": "top", "count": 10},
-        "showOther": true
-    },
-    "paint": {
-        "color": "@catPalette4",
-        "size": 6,
-        "opacity": 0.9,
-        "strokeColor": "auto",
-        "strokeWidth": 1
-    },
-    "legend": {}
-}
+Then style with:
+```
+generate_fsl description: "Transparent fill with blue stroke outline. No fill color, just the boundary."
 ```
 
-Or with explicit categories + colors:
+**Common buffer distances:**
+| Miles | Meters |
+|-------|--------|
+| 5 | 8046.72 |
+| 10 | 16093.44 |
+| 20 | 32186.88 |
 
-```json
-{
-    "version": "2.3.1",
-    "type": "categorical",
-    "config": {
-        "categoricalAttribute": "status",
-        "categories": ["Active", "Contained", "Out"],
-        "showOther": true
-    },
-    "paint": {
-        "color": ["#e74c3c", "#f39c12", "#2ecc71"],
-        "size": 6,
-        "opacity": 0.9
-    },
-    "legend": {
-        "displayName": {
-            "Active": "Active Fire",
-            "Contained": "Contained",
-            "Out": "Extinguished"
-        }
-    }
-}
+## Styling Descriptions for generate_fsl
+
+The `generate_fsl` tool takes a natural language description. Examples:
+
+**Categorical:**
+- "Categorical coloring by risk_tier. Orange for elevated, red for high, dark red for critical."
+- "Color by building_class using a qualitative palette."
+
+**Numeric:**
+- "Gradient from green (low) to red (high) based on risk_score."
+- "Heat gradient by wildfire_factor."
+
+**Simple:**
+- "All features in blue with 50% opacity."
+- "Transparent fill with dark blue stroke."
+
+**With popups:**
+- "...Include popup showing asset_id, risk_tier, and risk_score."
+
+## Querying Without Creating Layers
+
+To explore data before mapping:
+
+```
+Call: get_tabular_data_from_data_source
+Parameters:
+  - map_id: <any map you have access to>
+  - data_source_id: <from list_data_sources>
+  - sql_query: "SELECT risk_tier, COUNT(*) FROM workshop.insurance_exposure GROUP BY risk_tier"
+Returns: Tabular results (not a layer)
 ```
 
-### Numeric Style
+## Common Gotchas
 
-```json
-{
-    "version": "2.3.1",
-    "type": "numeric",
-    "config": {
-        "numericAttribute": "value",
-        "steps": {"type": "jenks", "count": 5}
-    },
-    "paint": {
-        "color": "@ylRed",
-        "opacity": 0.8,
-        "strokeColor": "auto"
-    },
-    "legend": {}
-}
-```
-
-### Palette Shortcuts
-
-- `@catPalette1` through `@catPalette5` — categorical
-- `@ylRed`, `@galaxy`, `@buGn`, `@worb` — sequential/diverging
-- `@fire`, `@ice` — thematic
-
-### Common Gotchas
-
-1. **`version: "2.3.1"` is required** — without it, 422 error
-2. **`showOther` not `showUncategorized`** — wrong key = silent failure
-3. **`legend.displayName` is a dict** `{"value": "Label"}` — not a string
-4. **Categories are plain strings** — not objects with `{value, color}`
-5. **Colors parallel to categories** — `paint.color` array must match `categories` array length
-6. **Style endpoint is POST** — `update_layer_style()` handles this
-
-## Additional References
-
-For advanced styling (heatmaps, icons, labels, popups, filters, raster, MapLibre expressions),
-see [references/FULL_REFERENCE.md](references/FULL_REFERENCE.md).
+1. **Always find data_source_id first** — don't guess or hardcode
+2. **Always poll after adding layers** — styling a processing layer will fail
+3. **Always render last** — it's a snapshot, not a live view
+4. **Use generate_fsl** — don't hand-write FSL, the tool does it better
+5. **Include geometry in SQL** — layers need a geometry column
+6. **Use workshop. prefix** — bare table names fail
