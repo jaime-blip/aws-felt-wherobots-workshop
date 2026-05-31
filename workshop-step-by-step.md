@@ -523,7 +523,7 @@ The agent also has **fallback skills** in `skills/`:
 
 **`aurora-postgis/SKILL.md`** — Fallback for direct psycopg2 access when MCP fails
 
-### Step 2 — Run the agent: your first map (10 min)
+### Step 2 — Run the agent: from a simple map to a stunning one (15 min)
 
 Start the agent in **interactive mode**:
 
@@ -533,18 +533,18 @@ Start the agent in **interactive mode**:
 
 The agent will prompt you for what to map. Try this first prompt — it builds a single-layer **triage map** of the buildings an underwriter should look at first:
 
-> **Suggested prompt:** *"As an insurance underwriter, show me the buildings I should review first: map the high and critical risk buildings across San Diego County, colored by risk tier — red for high, dark red for critical. Add a popup showing each building's risk score and its wildfire, flood, and severe-weather factors so I can see what's driving the risk."*
+> **Suggested prompt:** *"As an insurance underwriter, map the high and critical risk buildings across San Diego County on a dark basemap, colored by risk tier — red for high, dark red for critical."*
 
 **What happens behind the scenes (MCP tool calls):**
 1. `list_data_sources` → finds the Aurora PostgreSQL connection
-2. `create_map` → creates a new Felt map over San Diego County
+2. `create_map` → creates a new Felt map over San Diego County on a dark basemap
 3. `create_layer_from_data_source` → SQL query for the high + critical risk buildings
 4. `poll_layer_processing_status` → waits for the layer to finish
-5. `generate_fsl` → builds a categorical style for `risk_tier` plus the factor popup
+5. `generate_fsl` → builds a categorical style for `risk_tier`
 6. `update_layer_properties` → applies the style
 7. `render_map` → shows inline preview + returns URL
 
-**What you'll see:** 21,501 buildings — and they rake across the **eastern backcountry** (Poway, Ramona, Julian), the wildland-urban interface, *not* the coast. The serious hazard sits at the county's edges. Click a dark-red (critical) building and you'll see a high **wildfire factor** driving it; closer to the coast the risk is driven more by flood and severe weather. Wildfire is the escalator that pushes a building into the critical tier.
+**What you'll see:** 21,501 buildings — and they rake across the **eastern backcountry** (Poway, Ramona, Julian), the wildland-urban interface, *not* the coast. The serious hazard sits at the county's edges: the inland critical (dark-red) buildings are wildfire-driven, while closer to the coast risk leans more on flood and severe weather. Wildfire is the escalator that pushes a building into the critical tier.
 
 | Risk Tier | Count | On this map |
 |-----------|------:|:-----------:|
@@ -556,9 +556,23 @@ The agent will prompt you for what to map. Try this first prompt — it builds a
 
 Of ~1M buildings, only **21,501 (2%)** land in the high/critical tiers — that focus is the point of a triage map.
 
-> **Tip:** The popup is already wired up — click any building to see its risk score and the wildfire / flood / severe-weather factors behind it. Notice how wildfire climbs as you move inland.
->
-> **Why no "context" buffer?** A buffer circle around downtown would highlight the *safe* urban core — the high/critical buildings are 20–50 miles east of it, so the story is in the backcountry, not a ring around the city. Single, focused layers make clearer first maps. (You'll use spatial buffers later, in Step 3.)
+> **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs as you move inland.
+
+#### Now make it cool — a heatmap that resolves into the buildings
+
+Stay in the same agent session and add one more layer. This is where Felt's styling shines: a single follow-up prompt turns the flat building map into a **zoom-aware** view — a glowing risk-density heatmap when you're zoomed out, the individual buildings when you zoom in.
+
+> **Suggested prompt:** *"Now add a risk-density layer: aggregate these buildings into an H3 hexbin heatmap colored by their average risk score, with fine bins. Make the heatmap fade out as I zoom in while the buildings fade in — so I see county-wide hotspots when zoomed out and the actual buildings when zoomed in."*
+
+**What the agent does:**
+1. `create_layer_from_data_source` → a second layer of building **centroids** (`ST_Centroid`) carrying `risk_score`
+2. `generate_fsl` → an **H3 hexbin** style: `aggregation: mean` of `risk_score`, fine bins (`binMode: high`), a warm heat palette (`@ylRed`)
+3. `update_layer_properties` on **both** layers → a zoom **opacity ramp**: the heatmap `{"linear": [[10, 0.9], [13, 0]]}` (fades out), the buildings `{"linear": [[11, 0], [13, 0.85]]}` (fades in)
+4. `render_map`
+
+**What you'll see:** Zoomed out, the county glows with **average-risk hotspots** — the San Marcos / Poway / backcountry concentrations pop, with none of the dot-mush of 21,000 overlapping footprints. Zoom past ~z12 and the heatmap dissolves into the **actual high/critical buildings**, tier-colored and clickable. Same data, two reading altitudes — overview and detail — entirely driven by style.
+
+> **Why it works:** the zoom behavior lives in the FSL `opacity` ramp (`{"linear": [[zoom, value], …]}`) — no special layer-visibility toggle needed. H3 bins by point location, so the heatmap queries centroids; the building layer stays polygons.
 
 ### Step 3 — Explore with more prompts (15 min)
 
@@ -566,35 +580,11 @@ Continue in **interactive mode** — the agent remembers context from previous m
 
 ---
 
-**Different industry, same buildings:**
-
-> *"Now create a map showing CRE risk scores as a gradient from green to red. How does this compare to the insurance view?"*
-
-The agent queries `workshop.cre_risk` and applies a numeric gradient. Compare with your insurance map — the same buildings get different colors because CRE weights severe weather more heavily (0.35 vs 0.20).
-
----
-
-**Wildfire-specific view:**
-
-> *"Show me energy infrastructure with high outage probability. Color by vegetation encroachment risk."*
-
-Queries `workshop.energy_infra_risk WHERE outage_probability > 0.5`. Shows buildings near dry brush zones where power lines meet wildfire fuel — the ignition risk hotspots.
-
----
-
 **Spatial query (PostGIS in action):**
 
-> *"What are the 100 highest-risk buildings within 5km of downtown San Diego? Show them on a map."*
+> *"What are the 100 highest-risk buildings within 10 miles of downtown San Diego (32.7157, -117.1611)? Show them on a map, and draw the 10-mile radius as a visible buffer circle for context."*
 
-Triggers a `ST_DWithin` spatial query. Expect ~100 markers in the urban core — mostly moderate risk from severe weather, not wildfire. Downtown is relatively safe.
-
----
-
-**Multi-layer comparison:**
-
-> *"Create a map with two layers: insurance risk tier and CRE risk tier for the same buildings. I want to see where they disagree."*
-
-Creates one map with two source layers from different Gold tables. Shows how the same physical buildings are scored differently by different industries.
+Triggers a `ST_DWithin` spatial query plus an `ST_Buffer` ring you can actually see (transparent fill, colored stroke). Expect ~100 markers inside the circle — mostly moderate risk from severe weather, not wildfire. The buffer makes the point visually: the worst (high/critical) buildings sit *outside* the metro ring, out in the eastern backcountry.
 
 ---
 
@@ -603,14 +593,6 @@ Creates one map with two source layers from different Gold tables. Shows how the
 > *"Map all buildings near Poway with wildfire_factor above 0.3. Use a heat gradient to show severity."*
 
 These are the ~159 buildings at the wildland-urban interface. The gradient shows which specific buildings face the highest burn probability — the 2003 Cedar Fire and 2007 Witch Creek Fire swept through this exact area.
-
----
-
-**Custom exploration:**
-
-> *"What would you suggest mapping next based on what we've seen?"*
-
-The agent can recommend queries based on the patterns it's observed. Try asking it to find anomalies, outliers, or interesting spatial clusters.
 
 ### Step 4 — Explore the Felt map (5 min)
 

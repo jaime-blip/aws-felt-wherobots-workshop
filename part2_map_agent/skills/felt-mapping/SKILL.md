@@ -120,6 +120,51 @@ Add layers one at a time, waiting for each to complete:
 3. Add layer 2 → poll → style
 4. Render map (once, at the end)
 
+## Zoom-Aware Styling (size / opacity ramps)
+
+Any numeric paint property can interpolate across zoom levels using
+`{"linear": [[zoom, value], [zoom, value], ...]}`. Plus `minZoom` / `maxZoom`
+in `paint` clamp where a layer draws. This all lives in FSL — there is no
+separate "layer visibility" API, so use opacity ramps to show/hide by zoom.
+
+```json
+"size":    {"linear": [[5, 4], [15, 12]]}
+"opacity": {"linear": [[10, 0.9], [13, 0]]}
+```
+
+## Pattern: Risk-density heatmap that resolves into features (overview → detail)
+
+A high-impact two-layer map: a glowing **H3 hexbin** heatmap when zoomed out,
+the **individual features** when zoomed in, cross-faded purely by style. Great
+for dense point/polygon sets (e.g. tens of thousands of buildings) that turn to
+dot-mush at low zoom.
+
+1. **Dark basemap** so the heat glows: `update_map` with `basemap: "dark"`.
+2. **Overview layer — H3 hexbins.** H3 bins by *point* location, so query
+   **centroids** of the features plus the metric to aggregate:
+   ```sql
+   SELECT asset_id, risk_score, ST_Centroid(geometry) AS geometry
+   FROM workshop.insurance_exposure WHERE risk_tier IN ('high','critical')
+   ```
+   Style (`generate_fsl` viz_type `h3`, then add the fade-out ramp):
+   ```json
+   {"type": "h3", "version": "2.3.1",
+    "config": {"numericAttribute": "risk_score", "aggregation": "mean",
+               "baseBinLevel": 7, "binMode": "high",
+               "steps": {"type": "quantiles", "count": 5}},
+    "paint":  {"color": "@ylRed", "opacity": {"linear": [[10, 0.9], [13, 0]]},
+               "strokeColor": "#1a0000", "strokeWidth": 0.5}}
+   ```
+   `aggregation` accepts `mean` (avg), `sum`, `count`, `min`, `max`.
+   `binMode: "high"` + higher `baseBinLevel` (7) = finer hotspots.
+3. **Detail layer — the features themselves** (polygons), categorical by tier,
+   with the mirror fade-*in* ramp so they appear as the heatmap fades:
+   ```json
+   "opacity": {"linear": [[11, 0], [13, 0.85]]}
+   ```
+4. Poll both, then `render_map`. Crossover lands around z12; widen the band
+   (e.g. `[[10,…],[14,…]]`) for a softer dissolve.
+
 ## Buffer / Reference Layers
 
 To add a buffer circle around a point, use PostGIS in the SQL query:

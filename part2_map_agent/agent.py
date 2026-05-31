@@ -252,7 +252,7 @@ User: "Show elevated risk buildings colored by tier"
    - latitude: 32.7157
    - longitude: -117.1611
    - zoom: 10
-   - basemap: "light"
+   - basemap: "dark"  (risk maps read best on dark — colors and heat pop)
 3. Call `create_layer_from_data_source`:
    - data_source_id: <from step 1>
    - sql_query: "SELECT asset_id, building_class, risk_score, risk_tier, geometry FROM workshop.insurance_exposure WHERE risk_tier = 'elevated'"
@@ -284,6 +284,20 @@ SELECT
 ```
 
 Then style with transparent fill + colored stroke via `generate_fsl`.
+
+## Zoom-Aware & Heatmap Styling
+
+Felt styles can react to zoom. Any numeric paint property accepts a ramp
+`{"linear": [[zoom, value], ...]}` (plus `minZoom`/`maxZoom`) — there is no
+separate visibility API, so use an `opacity` ramp to fade layers in/out by zoom.
+
+Flagship pattern — **risk-density heatmap that resolves into features**: an H3
+hexbin layer (`type: "h3"`, `aggregation: "mean"` of a metric like `risk_score`,
+`binMode: "high"` for fine hotspots) on a **dark** basemap, fading OUT as you
+zoom in (`opacity {"linear": [[10,0.9],[13,0]]}`), cross-faded with the actual
+features fading IN (`{"linear": [[11,0],[13,0.85]]}`). H3 bins by point, so query
+`ST_Centroid(geometry)` for the hexbin layer; keep polygons for the detail layer.
+See the `felt-mapping` skill ("Pattern: Risk-density heatmap…") for the full recipe.
 
 ## SQL Requirements
 
