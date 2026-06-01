@@ -67,26 +67,28 @@ It walks you through everything in order — setup (clone, credentials, MCP conf
 ## Repository Structure
 
 ```
+├── README.md                          # This file
+├── CLAUDE.md                          # Project guide for AI coding agents
 ├── architecture.md                    # Two-part architecture diagram + design decisions
 ├── workshop-step-by-step.md           # 90-minute workshop guide
-├── abstract.md                        # Workshop abstract
 ├── .env.example                       # Credential template
 │
 ├── part1_data_engineering/
 │   ├── bronze-to-silver.ipynb         # Spatial joins, zonal stats, KNN (generated via MCP)
 │   ├── silver-to-gold.ipynb           # Industry scoring, risk tiers (generated via MCP)
 │   ├── aurora_schema.sql              # Aurora DDL reference
-│   ├── data_dictionary.md             # Full schema + business logic for all 15 tables
+│   ├── data_dictionary.md             # Full schema + business logic (silver + gold tables)
+│   ├── custom-pipelines/              # Participant-generated pipeline variations
 │   └── skills/wherobots-pipeline/     # Skill that guides MCP toward deterministic output
 │
 ├── part2_map_agent/
 │   ├── agent.py                       # Strands Agent (Bedrock Claude + skills + python_repl)
 │   ├── run.sh                         # Agent launcher
 │   ├── requirements.txt               # Python dependencies
-│   ├── skills/
-│   │   ├── aurora-postgis/            # Skill: PostGIS query patterns
-│   │   └── felt-mapping/              # Skill: Felt map creation + FSL styling
-│   └── evals/                         # LLM-as-judge evaluation framework
+│   ├── CLAUDE.md                      # Part 2 agent guide
+│   └── skills/
+│       ├── aurora-postgis/            # Skill: PostGIS query patterns
+│       └── felt-mapping/              # Skill: Felt map creation + FSL styling
 │
 ├── deploy-aurora/
 │   ├── cloudformation.yaml            # Aurora + VPC + Bedrock IAM (provisioning)
@@ -98,7 +100,7 @@ It walks you through everything in order — setup (clone, credentials, MCP conf
 │   ├── upload_seed_to_s3.sh           # Refreshes the Aurora seed file in S3
 │   └── dump_gold_tables.py            # Authoring tool: snapshot gold tables → CSV + DDL
 │
-└── tmp/                               # Dev-only scripts (not part of workshop)
+└── screenshots/                       # Workshop walkthrough screenshots
 ```
 
 ---
