@@ -184,8 +184,6 @@ To connect notebooks to Wherobots compute (needed for Part 1):
 2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
 3. Code now executes on Wherobots Cloud (Sedona)
 
-> **Full guide:** [`docs/kiro-wherobots-setup.md`](docs/kiro-wherobots-setup.md) covers installation, MCP config, runtime connection, Data Hub, and troubleshooting.
-
 ### Step 5 — Configure MCP servers
 
 Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
@@ -238,7 +236,7 @@ This creates a **Felt data source** named `workshop-db` so the Map Builder Agent
 
 > **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
 >
-> **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs; for production considerations, see `docs/felt-aurora-connection.md`.
+> **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs.
 
 ## Part 1: Agentic Data Engineering with Wherobots MCP (~35 min)
 

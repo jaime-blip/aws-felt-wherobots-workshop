@@ -19,7 +19,6 @@ part collaborator, part teacher — not to grind through a prebaked demo.
 | `part1_data_engineering/custom-pipelines/` | Where the agent writes **participant-generated** pipeline variations (create on demand) |
 | `part2_map_agent/` | Strands Agent + Felt MCP for map building. See its own `CLAUDE.md`. |
 | `deploy-aurora/cloudformation.yaml` | Aurora + VPC for the workshop |
-| `docs/kiro-wherobots-setup.md` | Participant setup guide |
 
 ## How the agent should behave
 
@@ -72,4 +71,3 @@ Participants set `WHEROBOTS_API_KEY`, `FELT_API_TOKEN`, and `AURORA_DSN` in thei
 | Design Gold scoring for a new industry | `part1_data_engineering/skills/wherobots-pipeline/references/gold-scoring.md` |
 | Work with OPERA flood data specifically | `part1_data_engineering/skills/wherobots-pipeline/references/opera-dswx-s1.md` |
 | Build a Felt map from Aurora | `part2_map_agent/CLAUDE.md` + `part2_map_agent/skills/*` |
-| Help a participant set up Kiro | `docs/kiro-wherobots-setup.md` |
