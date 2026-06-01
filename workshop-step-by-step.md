@@ -48,7 +48,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 | **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
 | **AWS account** | Your own AWS account with admin/CFN permissions | Part 1 + 2 |
 | **Aurora PostgreSQL** | Deployed by you in **Step 2** via CloudFormation | Part 1 + 2 |
-| **AWS Bedrock model access** | Enable Claude Opus 4.7 in `us-east-1` (Bedrock console → Model access) | Part 2 |
+| **AWS Bedrock model access** | Enable Claude Opus 4.8 in `us-east-1` (Bedrock console → Model access) | Part 2 |
 
 > **Note:** Each participant deploys their own AWS stack. The CloudFormation template in `deploy-aurora/cloudformation.yaml` provisions Aurora, the VPC, and the Bedrock IAM role. Follow the links above to create the Felt and Wherobots accounts.
 
@@ -69,10 +69,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 
 ### Step 1 — Clone & install
 
-> **Required for Part 2.** The Map Builder Agent runs locally in this Python
-> virtualenv. Don't skip the `python3 -m venv .venv` line — Part 2's
-> `./run.sh` activates `.venv/` on every invocation and will error out if it
-> doesn't exist.
+> **Python 3.10+ needed.** macOS's `python3` is 3.9.6 (too old) — `brew install python@3.13`, then use `python3.13 -m venv .venv` below.
 
 ```bash
 git clone https://github.com/jaime-blip/aws-felt-wherobots-workshop.git
@@ -88,14 +85,18 @@ Verify the install:
 python -c "import strands, strands_tools, felt_python; print('venv ready')"
 ```
 
+A successful clone, install, and verify looks like this:
+
+![Step 1 — clone, install, and verify the venv](screenshots/step1-clone-install.png)
+
 ### Step 2 — Deploy the AWS stack (~10 min)
 
 Each participant deploys their own Aurora cluster, VPC, and Bedrock IAM role.
 The stack also auto-seeds `workshop.insurance_exposure` so Part 2 has data to
 query before Part 1's pipeline finishes.
 
-> **Before deploying:** make sure Bedrock model access for **Claude Opus 4.7**
-> (`anthropic.claude-opus-4-7`) is enabled in `us-east-1`. Bedrock console →
+> **Before deploying:** make sure Bedrock model access for **Claude Opus 4.8**
+> (`anthropic.claude-opus-4-8`) is enabled in `us-east-1`. Bedrock console →
 > *Model access* → *Manage model access*.
 
 Deploy the stack (pick a strong password — you'll put it in `.env` next step):

@@ -10,5 +10,6 @@ transcripts/
 tmp/screenshots/*.png
 .playwright-mcp/
 *.png
+!screenshots/*.png
 CLAUDE.md
 tmp/

@@ -10,7 +10,7 @@
 
 ## The Data Story
 
-**358,985 San Diego buildings** scored for wildfire, flood, and severe weather risk across 4 industry verticals (insurance, commercial real estate, capital markets, energy). The wildland-urban interface near Poway and Ramona — where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods — is where risk concentrates. Same buildings, different scores depending on who's asking.
+**1,035,306 San Diego buildings** scored for wildfire, flood, and severe weather risk across 4 industry verticals (insurance, commercial real estate, capital markets, energy). The wildland-urban interface near Poway and Ramona — where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods — is where risk concentrates. Same buildings, different scores depending on who's asking.
 
 ---
 
@@ -48,7 +48,7 @@ Developer in Claude Code / Kiro         Strands Agent (Bedrock Claude)
 ┌──────────────────┐                     │ live from Aurora  │
 │ Aurora PostgreSQL ├────────────────────▶│                  │
 │ workshop schema  │                     └──────────────────┘
-│ 358K × 4 tables  │
+│ ~1M × 4 tables   │
 └──────────────────┘
 ```
 
@@ -56,40 +56,11 @@ Developer in Claude Code / Kiro         Strands Agent (Bedrock Claude)
 
 ---
 
-## Quick Start
+## Get Started
 
-```bash
-git clone https://github.com/jaime-blip/aws-felt-wherobots-workshop.git
-cd aws-felt-wherobots-workshop
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r part2_map_agent/requirements.txt
-cp .env.example .env  # fill in your credentials
-```
+👉 **Go straight to the [step-by-step workshop guide](workshop-step-by-step.md).**
 
-Configure MCP servers (Kiro, VS Code, or Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "wherobots": {
-      "url": "https://api.cloud.wherobots.com/mcp/",
-      "headers": { "X-API-Key": "${WHEROBOTS_API_KEY}" }
-    },
-    "felt": {
-      "url": "https://felt.com/mcp",
-      "headers": { "Authorization": "Bearer ${FELT_API_TOKEN}" }
-    }
-  }
-}
-```
-
-Run the Map Builder Agent:
-
-```bash
-./run.sh "Show me buildings with high insurance risk in San Diego, colored by risk tier"
-```
-
-> See [workshop-step-by-step.md](workshop-step-by-step.md) for the full 90-minute guided workshop.
+It walks you through everything in order — setup (clone, credentials, MCP configuration), then the full 90-minute hands-on workshop from Part 1 (data engineering) through Part 2 (the map agent).
 
 ---
 
@@ -138,7 +109,7 @@ Run the Map Builder Agent:
 |-----------|-----------|------|
 | **Data Processing** | Wherobots Cloud (Apache Sedona) + Wherobots MCP | Spatial SQL, medallion pipeline |
 | **Data Store** | Amazon Aurora PostgreSQL 17 + PostGIS | Gold layer serving, spatial queries |
-| **AI Orchestration** | Amazon Bedrock (Claude Opus 4.7) + Strands Agents SDK | Agent that generates and executes Python |
+| **AI Orchestration** | Amazon Bedrock (Claude Opus 4.8) + Strands Agents SDK | Agent that generates and executes Python |
 | **Visualization** | Felt + Felt MCP (`felt.com/mcp`) | Interactive maps, styling, sharing |
 | **Infrastructure** | Amazon S3, AWS IAM, CloudFormation | Storage, auth, provisioning |
 
