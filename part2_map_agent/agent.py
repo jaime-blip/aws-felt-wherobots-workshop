@@ -365,7 +365,11 @@ def get_model():
             "BEDROCK_MODEL_ID",
             "us.anthropic.claude-opus-4-8",
         ),
-        region_name=os.environ.get("AWS_REGION", "us-west-2"),
+        region_name=(
+            os.environ.get("AWS_REGION")
+            or os.environ.get("AWS_DEFAULT_REGION")
+            or "us-west-2"
+        ),
     )
 
 
@@ -386,7 +390,23 @@ def create_agent(felt_tools: list) -> Agent:
 
 # ── CLI ────────────────────────────────────────────────────────
 
+def _preflight():
+    """Fail fast with a clear message if required credentials are missing."""
+    token = os.environ.get("FELT_API_TOKEN", "").strip()
+    if not token or token == "your-felt-api-token":
+        print("❌ FELT_API_TOKEN is not set in your .env.")
+        print("   The Map Builder Agent needs a Felt API token to reach the Felt MCP.")
+        print("   Get one at Felt → Settings → Integrations (it starts with 'felt_pat_'),")
+        print("   set FELT_API_TOKEN=... in the repo-root .env, then re-run ./run.sh.")
+        sys.exit(1)
+    dsn = os.environ.get("AURORA_DSN", "").strip()
+    if not dsn or "your-aurora-host" in dsn:
+        print("⚠️  AURORA_DSN looks unset — Felt will connect, but Aurora queries may fail.")
+        print("   Set AURORA_DSN in .env (the AuroraDSN from your CloudFormation outputs).\n")
+
+
 def main():
+    _preflight()
     print("🗺️  Map Builder Agent (Felt MCP)")
     print("=" * 50)
     print("Build Felt maps from Aurora PostgreSQL data.")
@@ -398,36 +418,43 @@ def main():
     print()
 
     # Connect to Felt MCP and stay connected for the session
-    with felt_mcp_client:
-        print("🔌 Connecting to Felt MCP...")
-        felt_tools = felt_mcp_client.list_tools_sync()
-        print(f"✅ Felt MCP connected ({len(felt_tools)} tools available)")
-        print()
-
-        agent = create_agent(felt_tools)
-
-        # Single prompt from CLI args
-        if len(sys.argv) > 1:
-            prompt = " ".join(sys.argv[1:])
-            print(f"🔍 {prompt}\n")
-            agent(prompt)
+    try:
+        with felt_mcp_client:
+            print("🔌 Connecting to Felt MCP...")
+            felt_tools = felt_mcp_client.list_tools_sync()
+            print(f"✅ Felt MCP connected ({len(felt_tools)} tools available)")
             print()
 
-        # Interactive loop (stays inside MCP context)
-        while True:
-            try:
-                prompt = input("🔍 > ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print("\n👋 Bye!")
-                break
-            if not prompt:
-                continue
-            if prompt.lower() in ("quit", "exit", "q"):
-                print("👋 Bye!")
-                break
-            print()
-            agent(prompt)
-            print()
+            agent = create_agent(felt_tools)
+
+            # Single prompt from CLI args
+            if len(sys.argv) > 1:
+                prompt = " ".join(sys.argv[1:])
+                print(f"🔍 {prompt}\n")
+                agent(prompt)
+                print()
+
+            # Interactive loop (stays inside MCP context)
+            while True:
+                try:
+                    prompt = input("🔍 > ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print("\n👋 Bye!")
+                    break
+                if not prompt:
+                    continue
+                if prompt.lower() in ("quit", "exit", "q"):
+                    print("👋 Bye!")
+                    break
+                print()
+                agent(prompt)
+                print()
+    except MCPClientInitializationError:
+        print("\n❌ Could not connect to the Felt MCP server (https://felt.com/mcp).")
+        print("   The usual cause is an invalid or expired FELT_API_TOKEN.")
+        print("   Check FELT_API_TOKEN in your .env (Felt → Settings → Integrations,")
+        print("   it starts with 'felt_pat_'), then re-run ./run.sh.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

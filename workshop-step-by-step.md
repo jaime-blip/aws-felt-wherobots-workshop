@@ -209,62 +209,36 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 }
 ```
 
+> For Felt MCP setup details and IDE-specific instructions, see the [Felt MCP help doc](https://help.felt.com/felt-ai/mcp).
+
 ### Step 6 — Connect Felt to Aurora PostgreSQL
 
-This step creates a **Felt data source** so the Map Builder Agent (Part 2) can query Aurora and create maps directly.
+This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it.
 
-1. Open any **Map** in Felt (or create a new one)
-2. Click **"Add to map"** (the **+** button in the layer panel)
-3. Select **"Connect a source"** or **"New data source"**
-4. Choose **PostgreSQL** from the source types
-5. Enter your Aurora connection details:
-   - **Host:** Your Aurora writer endpoint (from CloudFormation output `AuroraEndpoint`)
-   - **Port:** `5432`
+1. In the Felt left sidebar, under **Data sources**, click **+ → New data source**.
+2. Under **External**, choose **Postgres / PostGIS**.
+3. Fill in the connection (use the `AuroraEndpoint` from Step 2):
+   - **Source name:** `workshop-db` — must match exactly; the agent looks this name up at startup
+   - **Host:** your Aurora writer endpoint · **Port:** `5432`
    - **Database:** `workshop`
-   - **Username / Password:** From your Aurora credentials
-   - **Schema:** `workshop`
-6. Click **Test Connection** — you should see a green checkmark
-7. **Name the source exactly `workshop-db`** (this is what the agent looks up at startup).
-8. Click **Save** to create the source. It's now available across your workspace.
+   - **Username / Password:** `workshop_admin` + the password you set at deploy
+   - **Schema:** leave blank (Felt searches all schemas)
+   - **Access:** Public — so the whole workspace can use it
+   - **IP allowlist:** Felt connects from a fixed set of U.S. IPs (shown on the right of the form); your Aurora security group must allow them — the workshop CloudFormation already does.
+4. Felt connects and indexes the source — you'll see **"Authenticated to workshop-db"**, then **"Indexing source."**
+5. When indexing finishes, browse **`workshop.insurance_exposure`** to preview the rows, then click **Create map** (optional — the agent can also use the source directly).
 
-The agent resolves this source by name at runtime via the Felt API — no source ID is needed in `.env`. If you want to use a different name, set `FELT_SOURCE_NAME` in `.env` to match.
+<p>
+  <img src="screenshots/step6-1-new-data-source.png" width="49%" alt="Data sources → New data source" />
+  <img src="screenshots/step6-2-choose-source-type.png" width="49%" alt="Choose source type — Postgres / PostGIS" />
+  <img src="screenshots/step6-3-postgres-connection.png" width="49%" alt="Postgres / PostGIS connection form" />
+  <img src="screenshots/step6-4-authenticated.png" width="49%" alt="Authenticated to workshop-db, indexing source" />
+  <img src="screenshots/step6-5-browse-table.png" width="49%" alt="Browse workshop.insurance_exposure, then Create map" />
+</p>
 
-> **For instructor-led workshops:** The Felt source is pre-configured as `workshop-db`. Nothing else to set.
+> **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
 >
-> **Network note:** Felt connects from its infrastructure to your Aurora. For the workshop, Aurora is publicly accessible with the correct security group rules. For production deployments, see `docs/felt-aurora-connection.md` for network considerations.
-
-### Step 7 — Verify connections
-
-**Aurora PostgreSQL:**
-```bash
-python3 -c "
-import psycopg2, os
-from dotenv import load_dotenv
-load_dotenv()
-conn = psycopg2.connect(os.environ['AURORA_DSN'])
-cur = conn.cursor()
-cur.execute(\"SELECT tablename FROM pg_tables WHERE schemaname='workshop'\")
-print('Tables:', [r[0] for r in cur.fetchall()])
-conn.close()
-"
-```
-
-**Expected output:**
-```
-Tables: ['insurance_exposure', 'cre_risk', 'capmarkets_signals', 'energy_infra_risk']
-```
-
-**Wherobots MCP:** In your MCP chat, ask:
-> *"List available catalogs"*
-
-You should see `org_catalog` and `wherobots_open_data` in the response.
-
-**Felt MCP:** In your MCP chat, ask:
-> *"What maps do I have access to?"*
-
-You should see your Felt workspace maps listed.
-
----
+> **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs; for production considerations, see `docs/felt-aurora-connection.md`.
 
 ## Part 1: Agentic Data Engineering with Wherobots MCP (~35 min)
 
@@ -283,8 +257,8 @@ USFS Burn Probability┤                              │
 USFS Flame Length ───┘                              │
                                                     ├──▶ asset_enriched ──▶ insurance_exposure
 OPERA DSWx-S1 ──────▶ asset_flood_exposure ─────────┤                  ──▶ cre_risk
-                                                    │                  ──▶ capmarkets_signals
-NOAA SWDI Hail ──┐                                  │                  ──▶ energy_infra_risk
+                                                    │                  ──▶ capital_markets_signals
+NOAA SWDI Hail ──┐                                  │                  ──▶ energy_asset_risk
 NOAA SWDI Struct ┼──▶ asset_weather_density ────────┘
 NOAA SWDI TVS ───┘
                                     │
@@ -391,7 +365,7 @@ from dotenv import load_dotenv
 load_dotenv()
 conn = psycopg2.connect(os.environ['AURORA_DSN'])
 cur = conn.cursor()
-for table in ['insurance_exposure', 'cre_risk', 'capmarkets_signals', 'energy_infra_risk']:
+for table in ['insurance_exposure', 'cre_risk', 'capital_markets_signals', 'energy_asset_risk']:
     cur.execute(f'SELECT COUNT(*) FROM workshop.{table}')
     print(f'workshop.{table}: {cur.fetchone()[0]:,} rows')
 conn.close()
@@ -402,8 +376,8 @@ conn.close()
 ```
 workshop.insurance_exposure: 1,035,306 rows
 workshop.cre_risk: 1,035,306 rows
-workshop.capmarkets_signals: 1,035,306 rows
-workshop.energy_infra_risk: 1,035,306 rows
+workshop.capital_markets_signals: 1,035,306 rows
+workshop.energy_asset_risk: 1,035,306 rows
 ```
 
 **Explore the risk distribution:**

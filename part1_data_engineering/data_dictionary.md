@@ -18,8 +18,8 @@ USFS Burn Probability ──┤                              │
 USFS Flame Length     ──┘                              │
                                                        ├──▶ asset_enriched ──▶ insurance_exposure
 OPERA DSWx-S1         ────▶ asset_flood_exposure    ──┤                   ──▶ cre_risk
-                                                       │                   ──▶ capmarkets_signals
-NOAA SWDI Hail        ──┐                              │                   ──▶ energy_infra_risk
+                                                       │                   ──▶ capital_markets_signals
+NOAA SWDI Hail        ──┐                              │                   ──▶ energy_asset_risk
 NOAA SWDI Structure   ──┼──▶ asset_weather_density  ──┘
 NOAA SWDI TVS         ──┘
 ```
@@ -224,7 +224,7 @@ Target audience: CRE acquisition analysts, asset managers, environmental risk te
 
 ---
 
-### `capmarkets_signals`
+### `capital_markets_signals`
 
 Target audience: Quantitative analysts, equity researchers, supply chain risk teams.
 
@@ -245,7 +245,7 @@ Target audience: Quantitative analysts, equity researchers, supply chain risk te
 
 ---
 
-### `energy_infra_risk`
+### `energy_asset_risk`
 
 Target audience: Utility grid planners, pipeline operators, energy reliability teams.
 
