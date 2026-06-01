@@ -365,7 +365,7 @@ def get_model():
             "BEDROCK_MODEL_ID",
             "us.anthropic.claude-opus-4-8",
         ),
-        region_name=os.environ.get("AWS_REGION", "us-east-1"),
+        region_name=os.environ.get("AWS_REGION", "us-west-2"),
     )
 
 

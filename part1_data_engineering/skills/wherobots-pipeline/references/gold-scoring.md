@@ -89,7 +89,7 @@ def add_industry_factors(df, industry, weights):
 
 **Do NOT use fixed score thresholds.** With right-skewed hazard data, fixed
 thresholds like `Critical ≥ 0.80` produce extreme imbalance (e.g. 882K "low"
-and 65 "critical" out of 358K buildings), making maps useless.
+and 65 "critical" out of ~1M buildings), making maps useless.
 
 Use `percent_rank()` over `risk_score` to cut tiers by percentile:
 
