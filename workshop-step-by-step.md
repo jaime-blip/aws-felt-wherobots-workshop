@@ -537,6 +537,11 @@ Of ~1M buildings, only **21,501 (2%)** land in the high/critical tiers — that 
 
 > **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs as you move inland.
 
+<p>
+  <img src="screenshots/step2-1-buildings-map.png" width="49%" alt="High & critical risk buildings across San Diego County, colored by risk tier" />
+  <img src="screenshots/step2-2-building-popup.png" width="49%" alt="Building popup — risk score and the wildfire / flood / severe-weather factors" />
+</p>
+
 #### Now make it cool — a heatmap that resolves into the buildings
 
 Stay in the same agent session and add one more layer. This is where Felt's styling shines: a single follow-up prompt turns the flat building map into a **zoom-aware** view — a glowing risk-density heatmap when you're zoomed out, the individual buildings when you zoom in.
@@ -553,6 +558,11 @@ Stay in the same agent session and add one more layer. This is where Felt's styl
 
 > **Why it works:** the zoom behavior lives in the FSL `opacity` ramp (`{"linear": [[zoom, value], …]}`) — no special layer-visibility toggle needed. H3 bins by point location, so the heatmap queries centroids; the building layer stays polygons.
 
+<p>
+  <img src="screenshots/step2-3-h3-overview.png" width="49%" alt="Zoomed out — H3 risk-density heatmap colored by average risk score" />
+  <img src="screenshots/step2-4-h3-crossfade.png" width="49%" alt="Zoomed in — hexbins dissolving into the individual buildings" />
+</p>
+
 ### Step 3 — Explore with more prompts (15 min)
 
 Continue in **interactive mode** — the agent remembers context from previous maps. Try these prompts to explore different perspectives:
@@ -565,6 +575,8 @@ Continue in **interactive mode** — the agent remembers context from previous m
 
 Triggers a `ST_DWithin` spatial query plus an `ST_Buffer` ring you can actually see (transparent fill, colored stroke). Expect ~100 markers inside the circle — mostly moderate risk from severe weather, not wildfire. The buffer makes the point visually: the worst (high/critical) buildings sit *outside* the metro ring, out in the eastern backcountry.
 
+![Top 100 highest-risk buildings within 10 miles of downtown, with the 10-mile buffer ring](screenshots/step3-spatial-query.png)
+
 ---
 
 **The wildfire story:**
@@ -572,6 +584,8 @@ Triggers a `ST_DWithin` spatial query plus an `ST_Buffer` ring you can actually 
 > *"Map all buildings near Poway with wildfire_factor above 0.3. Use a heat gradient to show severity."*
 
 These are the ~159 buildings at the wildland-urban interface. The gradient shows which specific buildings face the highest burn probability — the 2003 Cedar Fire and 2007 Witch Creek Fire swept through this exact area.
+
+![Poway wildfire exposure — buildings with wildfire_factor > 0.3, colored by severity](screenshots/step3-wildfire-poway.png)
 
 ### Step 4 — Explore the Felt map (5 min)
 
@@ -586,7 +600,7 @@ Each map URL opens an interactive Felt map where you can:
 
 The Strands agent builds maps programmatically. But you can also explore data conversationally through the **Felt MCP** (`https://felt.com/mcp`).
 
-If you have Felt MCP configured (from Setup Step 3), try asking in your MCP chat:
+If you have Felt MCP configured (from Setup Step 5), try asking in your MCP chat:
 
 > *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the Workshop Aurora data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
 
@@ -595,6 +609,8 @@ Or query existing map data:
 > *"What's the average risk score by building_class for buildings in the elevated tier?"*
 
 This is the **business user** path — no Python, no agent code. Just natural language to maps.
+
+> New to the Felt MCP? See the [Felt MCP help doc](https://help.felt.com/felt-ai/mcp) for setup and what it can do.
 
 ### Key Takeaways — Part 2
 
