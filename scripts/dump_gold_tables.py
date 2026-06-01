@@ -35,8 +35,8 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 GOLD_TABLES: list[str] = [
     "workshop.insurance_exposure",
     "workshop.cre_risk",
-    "workshop.capmarkets_signals",
-    "workshop.energy_infra_risk",
+    "workshop.capital_markets_signals",
+    "workshop.energy_asset_risk",
 ]
 
 # Map PostgreSQL type OIDs / type names to SQL type strings used in DDL.

@@ -140,8 +140,8 @@ All Gold tables start from `asset_enriched` and apply the same framework:
 |---|---|---|---|---|
 | `insurance_exposure` | `workshop.insurance_exposure` | Insurance | 0.40 / 0.40 / 0.20 | exposure_delta, triage_priority, estimated_loss_band |
 | `cre_risk` | `workshop.cre_risk` | Commercial Real Estate | 0.30 / 0.35 / 0.35 | acquisition_screen_flag, environmental_risk_index, hazard_proximity_m |
-| `capmarkets_signals` | `workshop.capmarkets_signals` | Capital Markets | 0.20 / 0.30 / 0.50 | disruption_probability, supply_chain_vulnerability, event_signal_strength |
-| `energy_infra_risk` | `workshop.energy_infra_risk` | Energy & Utilities | 0.40 / 0.20 / 0.40 | outage_probability, vegetation_encroachment_risk, weather_impact_frequency |
+| `capital_markets_signals` | `workshop.capital_markets_signals` | Capital Markets | 0.20 / 0.30 / 0.50 | disruption_probability, supply_chain_vulnerability, event_signal_strength |
+| `energy_asset_risk` | `workshop.energy_asset_risk` | Energy & Utilities | 0.40 / 0.20 / 0.40 | outage_probability, vegetation_encroachment_risk, weather_impact_frequency |
 
 > For full column-level detail and business logic, see [data_dictionary.md](data_dictionary.md).
 
