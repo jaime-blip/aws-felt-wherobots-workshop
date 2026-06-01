@@ -33,7 +33,7 @@ The system has two parts — one for data engineering, one for end-user explorat
 ║  │ RAW (S3) │──▶│ SILVER   │──▶│ GOLD     │─────────▶│ AURORA       │ ║
 ║  │ NOAA     │   │ Zonal    │   │ Scoring  │          │ PostgreSQL   │ ║
 ║  │ OPERA    │   │ Stats    │   │ Weighting│          │ workshop.*   │ ║
-║  │ USFS     │   │ KNN Join │   │ Tiers    │          │ 358K x 4    │ ║
+║  │ USFS     │   │ KNN Join │   │ Tiers    │          │ ~1M x 4     │ ║
 ║  │ Overture │   │          │   │          │          │              │ ║
 ║  └──────────┘   └──────────┘   └──────────┘          └──────┬───────┘ ║
 ╚══════════════════════════════════════════════════════════════╪═════════╝
@@ -182,7 +182,7 @@ Both produce **live source layers** — the map stays connected to Aurora, so da
 |---|---|---|
 | Two-layer architecture | Wherobots MCP (data eng) + Strands/Felt MCP (maps) | Clean separation: data engineer builds pipeline, analyst explores maps |
 | Geographic scope | San Diego, CA | Wildfire + flood + severe weather overlap; compact for workshop |
-| Asset type | Buildings (Overture) | Available via Wherobots Open Data; 358K in San Diego |
+| Asset type | Buildings (Overture) | Available via Wherobots Open Data; ~1M in San Diego |
 | Aurora as handoff | `workshop` schema | Aurora bridges the two parts — pipeline writes, agent reads |
 | No Aurora MCP | Agent uses psycopg2 + Felt source layers | Felt MCP already queries Aurora; adding a third MCP is redundant |
 | Gold persistence | Iceberg + Aurora | Iceberg for reprocessing, Aurora for serving and Felt connectivity |

@@ -9,7 +9,7 @@
 
 ## What You'll Build
 
-An end-to-end geospatial AI pipeline that scores **358,985 San Diego buildings** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
+An end-to-end geospatial AI pipeline that scores **1,035,306 San Diego buildings** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
 
 **Part 1 — Agentic Data Engineering** (~35 min)
 Walk through a Wherobots MCP-powered medallion pipeline (Bronze → Silver → Gold) that turns satellite imagery and weather events into per-building risk scores stored in Aurora PostgreSQL.
@@ -32,7 +32,7 @@ The same building gets **different risk scores** depending on who's asking:
 - A **real estate investor** weights severe weather highest (0.35) — they care about long-term value
 - An **energy company** weights wildfire at 0.40 — they care about grid infrastructure near vegetation
 
-This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
+This is what you'll explore: ~1M buildings, 4 industry perspectives, one map.
 
 ---
 
@@ -48,7 +48,7 @@ This is what you'll explore: 358K buildings, 4 industry perspectives, one map.
 | **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
 | **AWS account** | Your own AWS account with admin/CFN permissions | Part 1 + 2 |
 | **Aurora PostgreSQL** | Deployed by you in **Step 2** via CloudFormation | Part 1 + 2 |
-| **AWS Bedrock model access** | Enable Claude Opus 4.8 in `us-east-1` (Bedrock console → Model access) | Part 2 |
+| **AWS Bedrock model access** | Enable Claude Opus 4.8 in `us-west-2` (Bedrock console → Model access) | Part 2 |
 
 > **Note:** Each participant deploys their own AWS stack. The CloudFormation template in `deploy-aurora/cloudformation.yaml` provisions Aurora, the VPC, and the Bedrock IAM role. Follow the links above to create the Felt and Wherobots accounts.
 
@@ -96,7 +96,7 @@ The stack also auto-seeds `workshop.insurance_exposure` so Part 2 has data to
 query before Part 1's pipeline finishes.
 
 > **Before deploying:** make sure Bedrock model access for **Claude Opus 4.8**
-> (`anthropic.claude-opus-4-8`) is enabled in `us-east-1`. Bedrock console →
+> (`anthropic.claude-opus-4-8`) is enabled in `us-west-2`. Bedrock console →
 > *Model access* → *Manage model access*.
 
 Deploy the stack (pick a strong password — you'll put it in `.env` next step):
@@ -125,6 +125,10 @@ aws cloudformation describe-stacks \
 
 Note the `AuroraEndpoint` value — you'll need it in Step 3.
 
+The outputs table looks like this — `AuroraDSN`, `BedrockRoleArn`, `VpcId`, and `AuroraEndpoint`:
+
+![Step 2 — deploy the stack and read its outputs](screenshots/step2-deploy-stack.png)
+
 > **Verify the auto-seed (optional):** the stack runs a Lambda that creates the
 > `workshop` schema and bulk-loads `workshop.insurance_exposure` from S3. To
 > confirm:
@@ -134,11 +138,11 @@ Note the `AuroraEndpoint` value — you'll need it in Step 3.
 >   -c "SELECT count(*) FROM workshop.insurance_exposure;"
 > ```
 >
-> Expect ~358,985 rows. If empty, see `deploy-aurora/README.md` (the `AuroraSeed` Lambda log in CloudWatch will explain why).
+> Expect ~1,035,306 rows. If empty, see `deploy-aurora/README.md` (the `AuroraSeed` Lambda log in CloudWatch will explain why).
 
-> **Region note:** The template defaults to `us-west-2` for Aurora; the `.env`
-> below sets `us-east-1` for Bedrock. They don't need to match — Bedrock is
-> called over the public API.
+> **Region note:** Everything in this workshop runs in `us-west-2` — Aurora,
+> Wherobots, and Bedrock. Make sure your Bedrock model access (above) is enabled
+> in `us-west-2`.
 
 > **Tear-down:** `aws cloudformation delete-stack --stack-name geospatial-workshop --region us-west-2`
 
@@ -164,7 +168,7 @@ FELT_SOURCE_NAME=workshop-db
 
 # AWS (for Bedrock)
 AWS_PROFILE=default
-AWS_DEFAULT_REGION=us-east-1
+AWS_DEFAULT_REGION=us-west-2
 ```
 
 ### Step 4 — Set up Kiro with Wherobots extension (recommended)
@@ -313,7 +317,7 @@ This shows actual hail events with location, severity, and timestamp.
 
 | Source | Catalog Table | Type | Description |
 |---|---|---|---|
-| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 358K building footprints in San Diego |
+| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | ~1M building footprints in San Diego |
 | USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid (32 GB) |
 | USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs |
 | OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m) |
@@ -396,10 +400,10 @@ conn.close()
 
 **Expected output:**
 ```
-workshop.insurance_exposure: 358,985 rows
-workshop.cre_risk: 358,985 rows
-workshop.capmarkets_signals: 358,985 rows
-workshop.energy_infra_risk: 358,985 rows
+workshop.insurance_exposure: 1,035,306 rows
+workshop.cre_risk: 1,035,306 rows
+workshop.capmarkets_signals: 1,035,306 rows
+workshop.energy_infra_risk: 1,035,306 rows
 ```
 
 **Explore the risk distribution:**
