@@ -209,9 +209,52 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 
 > For Felt MCP setup details and IDE-specific instructions, see the [Felt MCP help doc](https://help.felt.com/felt-ai/mcp).
 
-### Step 6 — Connect Felt to Aurora PostgreSQL
+### Step 6 — Connect Felt to Aurora PostgreSQL (via the Felt API)
 
 This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it.
+
+Create the connection straight from your terminal — no clicking through the Felt UI. Fill in the three values at the top with your Felt token (Step 3) and your Aurora details (Step 2), then paste the whole block into your shell:
+
+```bash
+# ── Fill these in ──────────────────────────────────────────────────
+FELT_API_TOKEN="felt_pat_..."               # your Felt token (Step 3 / provided spreadsheet)
+AURORA_HOST="your-aurora-writer-endpoint"   # AuroraEndpoint from Step 2
+AURORA_PASSWORD="your-db-password"           # the password you set at deploy
+# ───────────────────────────────────────────────────────────────────
+
+curl -sS -X POST https://felt.com/api/v2/sources \
+  -H "Authorization: Bearer $FELT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- <<JSON
+{
+  "name": "workshop-db",
+  "connection": {
+    "type": "postgresql",
+    "host": "$AURORA_HOST",
+    "port": 5432,
+    "database": "workshop",
+    "user": "workshop_admin",
+    "password": "$AURORA_PASSWORD"
+  },
+  "permissions": { "type": "workspace_editors" }
+}
+JSON
+```
+
+- **`name` must be exactly `workshop-db`** — the agent looks this name up at startup.
+- **`permissions: workspace_editors`** makes the source usable by everyone in the workspace (the API equivalent of the UI's "Public" access).
+- A successful call returns **`202 Accepted`** with the new source's `id` and `name`. Felt then indexes the source in the background — give it a minute before the first query.
+- **IP allowlist:** Felt connects to Aurora from a fixed set of U.S. IPs; your Aurora security group must allow them — the workshop CloudFormation already does.
+
+> **Enterprise gate:** cloud data sources are an Enterprise feature. If the call returns **`403`**, your token's workspace doesn't have cloud sources enabled — use a token from the shared **AWS Workshop** workspace (or one provisioned with the feature flags for this workshop).
+>
+> **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
+>
+> **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs.
+
+#### Bonus — Connect via the Felt UI
+
+If you'd rather use the Felt web app (and your account has UI access to cloud sources), create the same `workshop-db` source by hand instead of running the command above:
 
 1. In the Felt left sidebar, under **Data sources**, click **+ → New data source**.
 2. Under **External**, choose **Postgres / PostGIS**.
@@ -233,10 +276,6 @@ This creates a **Felt data source** named `workshop-db` so the Map Builder Agent
   <img src="screenshots/step6-4-authenticated.png" width="49%" alt="Authenticated to workshop-db, indexing source" />
   <img src="screenshots/step6-5-browse-table.png" width="49%" alt="Browse workshop.insurance_exposure, then Create map" />
 </p>
-
-> **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
->
-> **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs.
 
 ## Part 1: Agentic Data Engineering with Wherobots MCP (~35 min)
 
