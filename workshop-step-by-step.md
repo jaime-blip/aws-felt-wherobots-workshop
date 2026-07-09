@@ -44,13 +44,15 @@ This is what you'll explore: ~1M buildings, 4 industry perspectives, one map.
 |---|---|---|
 | **Felt account** | [felt.com](https://felt.com) | Part 1 + 2 |
 | **Felt API token** | Felt → Settings → Integrations — starts with `felt_pat_...` | Part 2 |
-| **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) | Part 1 |
-| **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
+| **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) — org must be **Professional or Enterprise tier** (MCP access is not available on Community orgs) | Part 1 |
+| **Wherobots API key** | Wherobots Console → API Keys — generate it in the Professional/Enterprise-tier org | Part 1 |
 | **AWS account** | Your own AWS account with admin/CFN permissions | Part 1 + 2 |
 | **Aurora PostgreSQL** | Deployed by you in **Step 2** via CloudFormation | Part 1 + 2 |
 | **AWS Bedrock model access** | Enable Claude Opus 4.8 in `us-west-2` (Bedrock console → Model access) | Part 2 |
 
 > **Note:** Each participant deploys their own AWS stack. The CloudFormation template in `deploy-aurora/cloudformation.yaml` provisions Aurora, the VPC, and the Bedrock IAM role. Follow the links above to create the Felt and Wherobots accounts.
+>
+> **Wherobots tier check:** the Wherobots MCP server is gated by org tier. If your API key belongs to a Community-tier org, every MCP call fails with `MCP access is not enabled for your organization` — you'll need a key from a Professional or Enterprise org (workshop instructors can provide one). Verify your tier in the Wherobots Console under **Settings → Organization** before the session.
 
 ### Software
 
@@ -325,6 +327,8 @@ The Silver layer enriches each building with hazard data through three spatial o
 ### Step 3 — Walkthrough: Silver → Gold scoring (5 min)
 
 Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies a **4-step scoring framework**:
+
+> **Aurora connection:** the notebook's config cell resolves the Aurora connection automatically — from the `AURORA_DSN` environment variable, or from a `.env` file in the working directory or any parent. If neither is visible to the notebook runtime (e.g., a remote Wherobots kernel), the config cell stops with a clear error — paste your `AURORA_DSN` values into the manual fallback block in that cell. This must be configured for the run, otherwise the 4 Gold tables never land in Aurora and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
 
 **1. Normalize** — Min-max scale each hazard metric to [0, 1]
 **2. Weight** — Apply industry-specific weights:
@@ -660,8 +664,9 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 |---|---|
 | `psycopg2.OperationalError: connection refused` | Check Aurora host/port/credentials in `.env` |
 | `FELT_API_TOKEN not set` | Add token to `.env` |
-| `AccessDeniedException` from Bedrock | Check IAM permissions + Claude model access in Bedrock console |
+| `AccessDeniedException` from Bedrock | Check IAM permissions + Claude model access in Bedrock console. The role needs `bedrock:Converse` / `bedrock:ConverseStream` (the Strands SDK uses the Converse API) in addition to `bedrock:InvokeModel*` — on AWS Workshop Studio accounts, make sure `WSParticipantRole` includes them. |
 | Wherobots MCP not connecting | Verify API key and `https://api.cloud.wherobots.com/mcp/` URL |
+| `MCP access is not enabled for your organization` | Your Wherobots API key belongs to a Community-tier org. Use a key from a **Professional or Enterprise** org (see Prerequisites). |
 | Felt MCP not connecting | Verify API token and `https://felt.com/mcp` URL |
 | Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this |
 | Agent generates wrong SQL | Schema is in the system prompt — check `agent.py` for table definitions |

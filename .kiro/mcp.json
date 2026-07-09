@@ -8,10 +8,10 @@
       }
     },
     "felt": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/felt-mcp-server"],
-      "env": {
-        "FELT_API_TOKEN": "${FELT_API_TOKEN}"
+      "url": "https://felt.com/mcp",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer ${FELT_API_TOKEN}"
       }
     },
     "postgres": {
