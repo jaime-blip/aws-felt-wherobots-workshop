@@ -165,7 +165,8 @@ AURORA_DSN=postgresql://user:password@your-aurora-host:5432/workshop
 
 # Felt
 FELT_API_TOKEN=your-felt-api-token
-# Optional — defaults to "workshop-db". Must match the source name in Felt.
+# Optional — defaults to "workshop-db". Step 6 creates the Felt source with
+# this name and the Part 2 agent looks it up by the same name.
 FELT_SOURCE_NAME=workshop-db
 
 # AWS (for Bedrock)
@@ -259,7 +260,7 @@ curl -sS https://felt.com/api/v2/sources \
 1. In the Felt left sidebar, under **Data sources**, click **+ → New data source**.
 2. Under **External**, choose **Postgres / PostGIS**.
 3. Fill in the connection (use the `AuroraEndpoint` from Step 2):
-   - **Source name:** `workshop-db` — must match exactly; the agent looks this name up at startup
+   - **Source name:** `workshop-db` — must match your `FELT_SOURCE_NAME` (default `workshop-db`) exactly; the agent looks this name up at startup
    - **Host:** your Aurora writer endpoint · **Port:** `5432`
    - **Database:** `workshop`
    - **Username / Password:** `workshop_admin` + the password you set at deploy
@@ -427,7 +428,7 @@ workshop.energy_asset_risk: 1,035,306 rows
 
 Ask the Felt MCP (or run these SQL queries directly):
 
-> *"Query the Workshop Aurora data source: show me the risk tier distribution for insurance_exposure — count of buildings and average score per tier"*
+> *"Query the workshop-db data source: show me the risk tier distribution for insurance_exposure — count of buildings and average score per tier"*
 
 You should see:
 
@@ -444,7 +445,7 @@ You should see:
 - **84% of buildings** have significant severe weather exposure (Santa Ana winds, occasional hail) — that's the baseline
 - Different industry tables weight the **same hazards differently** — a building that's `elevated` for insurance may be only `moderate` for CRE
 
-> **Try it:** *"Query Workshop Aurora: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
+> **Try it:** *"Query workshop-db: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
 
 ### Key Takeaways — Part 1
 
@@ -645,7 +646,7 @@ The Strands agent builds maps programmatically. But you can also explore data co
 
 If you have Felt MCP configured (from Setup Step 5), try asking in your MCP chat:
 
-> *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the Workshop Aurora data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
+> *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the workshop-db data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
 
 Or query existing map data:
 
