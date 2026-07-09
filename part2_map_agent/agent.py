@@ -405,6 +405,29 @@ def _preflight():
         print("   Set AURORA_DSN in .env (the AuroraDSN from your CloudFormation outputs).\n")
 
 
+def _check_felt_source():
+    """Warn early if no Aurora data source exists in Felt (Setup Step 6).
+
+    Every Part 2 prompt starts with list_data_sources; if the workshop-db
+    source was never created, the agent stalls on its very first tool call
+    with no hint of why. Non-fatal: skills/instructor setups may differ.
+    """
+    try:
+        result = felt_mcp_client.call_tool_sync(
+            tool_use_id="preflight-list-data-sources",
+            name="list_data_sources",
+            arguments={},
+        )
+        text = str(result.get("content", "")).lower()
+    except Exception:
+        return  # non-fatal — the agent surfaces tool errors itself
+    if "postgres" not in text and "workshop-db" not in text:
+        print("⚠️  No Aurora data source found in Felt — the agent's first step")
+        print("    (list_data_sources) will come back empty and map prompts will fail.")
+        print("    Create the 'workshop-db' source first: Setup Step 6 in")
+        print("    workshop-step-by-step.md (one curl command via the Felt API).\n")
+
+
 def main():
     _preflight()
     print("🗺️  Map Builder Agent (Felt MCP)")
@@ -424,6 +447,8 @@ def main():
             felt_tools = felt_mcp_client.list_tools_sync()
             print(f"✅ Felt MCP connected ({len(felt_tools)} tools available)")
             print()
+
+            _check_felt_source()
 
             agent = create_agent(felt_tools)
 

@@ -213,7 +213,48 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 
 ### Step 6 — Connect Felt to Aurora PostgreSQL
 
-This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it.
+This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it. **Don't skip this step:** the agent's first move is `list_data_sources` to find Aurora — if no source exists, that call returns empty and the entire Part 2 flow stops.
+
+#### Option A — one command via the Felt API (recommended)
+
+Works with just your `FELT_API_TOKEN` — no Felt UI login needed (this is the route for pre-provisioned workshop tokens). It reads the connection details from the `.env` you filled in Step 3:
+
+```bash
+set -a; source .env; set +a
+
+curl -sS -X POST https://felt.com/api/v2/sources \
+  -H "Authorization: Bearer $FELT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(python3 - << 'PYEOF'
+import json, os
+from urllib.parse import urlparse, unquote
+u = urlparse(os.environ["AURORA_DSN"])
+print(json.dumps({
+    "name": os.environ.get("FELT_SOURCE_NAME", "workshop-db"),
+    "connection": {
+        "type": "postgresql",
+        "host": u.hostname,
+        "port": u.port or 5432,
+        "database": (u.path or "").lstrip("/") or "workshop",
+        "user": unquote(u.username or ""),
+        "password": unquote(u.password or ""),
+    },
+    "permissions": {"type": "workspace_editors"},
+}))
+PYEOF
+)"
+```
+
+The API returns `202 Accepted` and indexes the source asynchronously. Verify it shows up (look for `"name": "workshop-db"` with `sync_status` progressing to `completed`):
+
+```bash
+curl -sS https://felt.com/api/v2/sources \
+  -H "Authorization: Bearer $FELT_API_TOKEN" | python3 -m json.tool
+```
+
+> API reference: [developers.felt.com/rest-api/api-reference/sources](https://developers.felt.com/rest-api/api-reference/sources)
+
+#### Option B — Felt UI
 
 1. In the Felt left sidebar, under **Data sources**, click **+ → New data source**.
 2. Under **External**, choose **Postgres / PostGIS**.
@@ -236,7 +277,7 @@ This creates a **Felt data source** named `workshop-db` so the Map Builder Agent
   <img src="screenshots/step6-5-browse-table.png" width="49%" alt="Browse workshop.insurance_exposure, then Create map" />
 </p>
 
-> **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
+> **Instructor-led workshops:** instructors should pre-create the `workshop-db` source (Option A works with any workspace admin token). Participants: verify it exists with the `curl … /api/v2/sources` command above before starting Part 2 — if the list is empty, run Option A.
 >
 > **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs.
 
@@ -671,7 +712,7 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 | Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this |
 | Agent generates wrong SQL | Schema is in the system prompt — check `agent.py` for table definitions |
 | `ModuleNotFoundError` | Activate virtualenv: `source .venv/bin/activate` |
-| Agent can't find Felt source | Agent resolves by name (`FELT_SOURCE_NAME`, default `workshop-db`). Ensure a Felt source with that exact name is connected to Aurora. |
+| Agent can't find Felt source / `list_data_sources` returns empty | The `workshop-db` source was never created — Setup Step 6 was skipped. Run the Step 6 Option A command to create it via the API. The agent resolves the source by name (`FELT_SOURCE_NAME`, default `workshop-db`), so the name must match exactly. |
 
 ## Useful Links
 
