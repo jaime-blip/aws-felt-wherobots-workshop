@@ -68,7 +68,7 @@ Full rules and phase-by-phase guidance: **`part1_data_engineering/skills/wherobo
 Configured in `.kiro/mcp.json`:
 
 - **wherobots** — `https://api.cloud.wherobots.com/mcp/` (x-api-key)
-- **felt** — `felt-mcp-server` (Part 2 only)
+- **felt** — `https://felt.com/mcp` (Authorization: Bearer `FELT_API_TOKEN`; Part 2 only)
 - **postgres** — Aurora DSN (Part 2 only)
 
 Participants set `WHEROBOTS_API_KEY`, `FELT_API_TOKEN`, and `AURORA_DSN` in their shell env before opening Kiro or VS Code.

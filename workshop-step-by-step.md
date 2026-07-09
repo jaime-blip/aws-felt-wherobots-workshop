@@ -44,13 +44,15 @@ This is what you'll explore: ~1M buildings, 4 industry perspectives, one map.
 |---|---|---|
 | **Felt account** | [felt.com](https://felt.com) | Part 1 + 2 |
 | **Felt API token** | Felt → Settings → Integrations — starts with `felt_pat_...` | Part 2 |
-| **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) | Part 1 |
-| **Wherobots API key** | Wherobots Console → API Keys | Part 1 |
+| **Wherobots account** | [cloud.wherobots.com](https://cloud.wherobots.com) — org must be **Professional or Enterprise tier** (MCP access is not available on Community orgs) | Part 1 |
+| **Wherobots API key** | Wherobots Console → API Keys — generate it in the Professional/Enterprise-tier org | Part 1 |
 | **AWS account** | Your own AWS account with admin/CFN permissions | Part 1 + 2 |
 | **Aurora PostgreSQL** | Deployed by you in **Step 2** via CloudFormation | Part 1 + 2 |
 | **AWS Bedrock model access** | Enable Claude Opus 4.8 in `us-west-2` (Bedrock console → Model access) | Part 2 |
 
 > **Note:** Each participant deploys their own AWS stack. The CloudFormation template in `deploy-aurora/cloudformation.yaml` provisions Aurora, the VPC, and the Bedrock IAM role. Follow the links above to create the Felt and Wherobots accounts.
+>
+> **Wherobots tier check:** the Wherobots MCP server is gated by org tier. If your API key belongs to a Community-tier org, every MCP call fails with `MCP access is not enabled for your organization` — you'll need a key from a Professional or Enterprise org (workshop instructors can provide one). Verify your tier in the Wherobots Console under **Settings → Organization** before the session.
 
 ### Software
 
@@ -163,7 +165,8 @@ AURORA_DSN=postgresql://user:password@your-aurora-host:5432/workshop
 
 # Felt
 FELT_API_TOKEN=your-felt-api-token
-# Optional — defaults to "workshop-db". Must match the source name in Felt.
+# Optional — defaults to "workshop-db". Step 6 creates the Felt source with
+# this name and the Part 2 agent looks it up by the same name.
 FELT_SOURCE_NAME=workshop-db
 
 # AWS (for Bedrock)
@@ -211,12 +214,53 @@ Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
 
 ### Step 6 — Connect Felt to Aurora PostgreSQL
 
-This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it.
+This creates a **Felt data source** named `workshop-db` so the Map Builder Agent (Part 2) — and the Felt MCP — can query Aurora and build maps directly from it. **Don't skip this step:** the agent's first move is `list_data_sources` to find Aurora — if no source exists, that call returns empty and the entire Part 2 flow stops.
+
+#### Option A — one command via the Felt API (recommended)
+
+Works with just your `FELT_API_TOKEN` — no Felt UI login needed (this is the route for pre-provisioned workshop tokens). It reads the connection details from the `.env` you filled in Step 3:
+
+```bash
+set -a; source .env; set +a
+
+curl -sS -X POST https://felt.com/api/v2/sources \
+  -H "Authorization: Bearer $FELT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$(python3 - << 'PYEOF'
+import json, os
+from urllib.parse import urlparse, unquote
+u = urlparse(os.environ["AURORA_DSN"])
+print(json.dumps({
+    "name": os.environ.get("FELT_SOURCE_NAME", "workshop-db"),
+    "connection": {
+        "type": "postgresql",
+        "host": u.hostname,
+        "port": u.port or 5432,
+        "database": (u.path or "").lstrip("/") or "workshop",
+        "user": unquote(u.username or ""),
+        "password": unquote(u.password or ""),
+    },
+    "permissions": {"type": "workspace_editors"},
+}))
+PYEOF
+)"
+```
+
+The API returns `202 Accepted` and indexes the source asynchronously. Verify it shows up (look for `"name": "workshop-db"` with `sync_status` progressing to `completed`):
+
+```bash
+curl -sS https://felt.com/api/v2/sources \
+  -H "Authorization: Bearer $FELT_API_TOKEN" | python3 -m json.tool
+```
+
+> API reference: [developers.felt.com/rest-api/api-reference/sources](https://developers.felt.com/rest-api/api-reference/sources)
+
+#### Option B — Felt UI
 
 1. In the Felt left sidebar, under **Data sources**, click **+ → New data source**.
 2. Under **External**, choose **Postgres / PostGIS**.
 3. Fill in the connection (use the `AuroraEndpoint` from Step 2):
-   - **Source name:** `workshop-db` — must match exactly; the agent looks this name up at startup
+   - **Source name:** `workshop-db` — must match your `FELT_SOURCE_NAME` (default `workshop-db`) exactly; the agent looks this name up at startup
    - **Host:** your Aurora writer endpoint · **Port:** `5432`
    - **Database:** `workshop`
    - **Username / Password:** `workshop_admin` + the password you set at deploy
@@ -234,7 +278,7 @@ This creates a **Felt data source** named `workshop-db` so the Map Builder Agent
   <img src="screenshots/step6-5-browse-table.png" width="49%" alt="Browse workshop.insurance_exposure, then Create map" />
 </p>
 
-> **Instructor-led workshops:** the `workshop-db` source is pre-configured — nothing to set.
+> **Instructor-led workshops:** instructors should pre-create the `workshop-db` source (Option A works with any workspace admin token). Participants: verify it exists with the `curl … /api/v2/sources` command above before starting Part 2 — if the list is empty, run Option A.
 >
 > **Network note:** Felt connects from its infrastructure to Aurora. The workshop CloudFormation makes Aurora publicly reachable and allowlists Felt's IPs.
 
@@ -326,6 +370,8 @@ The Silver layer enriches each building with hazard data through three spatial o
 
 Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies a **4-step scoring framework**:
 
+> **Aurora connection:** the notebook's config cell resolves the Aurora connection automatically — from the `AURORA_DSN` environment variable, or from a `.env` file in the working directory or any parent. If neither is visible to the notebook runtime (e.g., a remote Wherobots kernel), the config cell stops with a clear error — paste your `AURORA_DSN` values into the manual fallback block in that cell. This must be configured for the run, otherwise the 4 Gold tables never land in Aurora and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
+
 **1. Normalize** — Min-max scale each hazard metric to [0, 1]
 **2. Weight** — Apply industry-specific weights:
 
@@ -382,7 +428,7 @@ workshop.energy_asset_risk: 1,035,306 rows
 
 Ask the Felt MCP (or run these SQL queries directly):
 
-> *"Query the Workshop Aurora data source: show me the risk tier distribution for insurance_exposure — count of buildings and average score per tier"*
+> *"Query the workshop-db data source: show me the risk tier distribution for insurance_exposure — count of buildings and average score per tier"*
 
 You should see:
 
@@ -399,7 +445,7 @@ You should see:
 - **84% of buildings** have significant severe weather exposure (Santa Ana winds, occasional hail) — that's the baseline
 - Different industry tables weight the **same hazards differently** — a building that's `elevated` for insurance may be only `moderate` for CRE
 
-> **Try it:** *"Query Workshop Aurora: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
+> **Try it:** *"Query workshop-db: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
 
 ### Key Takeaways — Part 1
 
@@ -600,7 +646,7 @@ The Strands agent builds maps programmatically. But you can also explore data co
 
 If you have Felt MCP configured (from Setup Step 5), try asking in your MCP chat:
 
-> *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the Workshop Aurora data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
+> *"Create a new map called 'Workshop Risk Explorer'. Add a layer from the workshop-db data source showing buildings where wildfire_factor > 0.5, styled categorically by risk_tier."*
 
 Or query existing map data:
 
@@ -660,13 +706,14 @@ In production, you'd use both: pipelines to keep data fresh, agents to let anyon
 |---|---|
 | `psycopg2.OperationalError: connection refused` | Check Aurora host/port/credentials in `.env` |
 | `FELT_API_TOKEN not set` | Add token to `.env` |
-| `AccessDeniedException` from Bedrock | Check IAM permissions + Claude model access in Bedrock console |
+| `AccessDeniedException` from Bedrock | Check IAM permissions + Claude model access in Bedrock console. The role needs `bedrock:Converse` / `bedrock:ConverseStream` (the Strands SDK uses the Converse API) in addition to `bedrock:InvokeModel*` — on AWS Workshop Studio accounts, make sure `WSParticipantRole` includes them. |
 | Wherobots MCP not connecting | Verify API key and `https://api.cloud.wherobots.com/mcp/` URL |
+| `MCP access is not enabled for your organization` | Your Wherobots API key belongs to a Community-tier org. Use a key from a **Professional or Enterprise** org (see Prerequisites). |
 | Felt MCP not connecting | Verify API token and `https://felt.com/mcp` URL |
 | Felt map is empty after creation | Layer still processing — `wait_for_layer()` handles this |
 | Agent generates wrong SQL | Schema is in the system prompt — check `agent.py` for table definitions |
 | `ModuleNotFoundError` | Activate virtualenv: `source .venv/bin/activate` |
-| Agent can't find Felt source | Agent resolves by name (`FELT_SOURCE_NAME`, default `workshop-db`). Ensure a Felt source with that exact name is connected to Aurora. |
+| Agent can't find Felt source / `list_data_sources` returns empty | The `workshop-db` source was never created — Setup Step 6 was skipped. Run the Step 6 Option A command to create it via the API. The agent resolves the source by name (`FELT_SOURCE_NAME`, default `workshop-db`), so the name must match exactly. |
 
 ## Useful Links
 

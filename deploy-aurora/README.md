@@ -11,7 +11,14 @@ the VPC it lives in, and the IAM role Part 2's agent uses to call Bedrock.
 | **VPC** | 10.0.0.0/16 with 2 public + 2 private subnets across 2 AZs |
 | **Aurora PostgreSQL Serverless v2** | Engine 16.4, 0.5–8 ACU, public subnets, encrypted, publicly accessible |
 | **Security Groups** | Aurora inbound on 5432 (open for workshop; restrict in production) |
-| **IAM Role** | Bedrock `InvokeModel` for Claude and Nova models |
+| **IAM Role** | Bedrock `InvokeModel` + `Converse` (Strands SDK uses the Converse API) for Claude and Nova models |
+
+> **AWS Workshop Studio note:** when this workshop runs on Workshop Studio
+> accounts, the participant role (`WSParticipantRole`) must also allow
+> `bedrock:Converse` and `bedrock:ConverseStream` — the Strands SDK calls the
+> Converse API, so `bedrock:InvokeModel*` alone makes Part 2's agent crash on
+> launch with an `AccessDeniedException`. Add these actions to the Workshop
+> Studio IAM policy alongside the invoke permissions.
 
 ## Prerequisites
 

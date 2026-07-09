@@ -51,6 +51,11 @@ FELT_MCP_SSE_READ_TIMEOUT = float(os.environ.get("FELT_MCP_SSE_READ_TIMEOUT", "6
 # How many times to rebuild the session and retry a tool call after a drop.
 FELT_MCP_MAX_RETRIES = int(os.environ.get("FELT_MCP_MAX_RETRIES", "1"))
 
+# Name of the Felt data source connected to Aurora. Must match the source
+# created in Setup Step 6 (the Step 6 Option A command names it from this
+# same env var, so both sides stay in sync).
+FELT_SOURCE_NAME = os.environ.get("FELT_SOURCE_NAME", "").strip() or "workshop-db"
+
 # ── Skills Plugin ──────────────────────────────────────────────
 skills_plugin = AgentSkills(skills=str(SKILLS_DIR))
 
@@ -220,7 +225,7 @@ Note: `capital_markets_signals` has no `risk_tier` column — use `risk_score` t
 
 Use these MCP tools in sequence:
 
-1. **list_data_sources** — Find the Aurora data source (look for "workshop-db" or similar PostgreSQL source)
+1. **list_data_sources** — Find the Aurora data source (look for "__FELT_SOURCE_NAME__" or similar PostgreSQL source)
 2. **create_map** — Create a new map with title, center lat/lon, zoom level
 3. **create_layer_from_data_source** — Add a layer via SQL query against Aurora
 4. **poll_layer_processing_status** — Wait for layer to finish processing (use wait_seconds=30)
@@ -352,7 +357,7 @@ conn.close()
 - ALWAYS include the map URL in your response
 - Use `generate_fsl` for styling — don't hand-write FSL
 - One map per request unless explicitly asked for multiple
-"""
+""".replace("__FELT_SOURCE_NAME__", FELT_SOURCE_NAME)
 
 
 # ── Agent Factory ──────────────────────────────────────────────
@@ -405,6 +410,30 @@ def _preflight():
         print("   Set AURORA_DSN in .env (the AuroraDSN from your CloudFormation outputs).\n")
 
 
+def _check_felt_source():
+    """Warn early if the Aurora data source is missing from Felt (Setup Step 6).
+
+    Every Part 2 prompt starts with list_data_sources; if the FELT_SOURCE_NAME
+    source was never created, the agent stalls on its very first tool call
+    with no hint of why. Non-fatal: skills/instructor setups may differ.
+    """
+    try:
+        result = felt_mcp_client.call_tool_sync(
+            tool_use_id="preflight-list-data-sources",
+            name="list_data_sources",
+            arguments={},
+        )
+        text = str(result.get("content", "")).lower()
+    except Exception:
+        return  # non-fatal — the agent surfaces tool errors itself
+    if FELT_SOURCE_NAME.lower() not in text and "postgres" not in text:
+        print(f"⚠️  No '{FELT_SOURCE_NAME}' (or other Postgres) data source found in Felt —")
+        print("    the agent's first step (list_data_sources) will come back empty and")
+        print(f"    map prompts will fail. Create the '{FELT_SOURCE_NAME}' source first:")
+        print("    Setup Step 6 in workshop-step-by-step.md (one curl command via the")
+        print("    Felt API — it names the source from this same FELT_SOURCE_NAME).\n")
+
+
 def main():
     _preflight()
     print("🗺️  Map Builder Agent (Felt MCP)")
@@ -424,6 +453,8 @@ def main():
             felt_tools = felt_mcp_client.list_tools_sync()
             print(f"✅ Felt MCP connected ({len(felt_tools)} tools available)")
             print()
+
+            _check_felt_source()
 
             agent = create_agent(felt_tools)
 

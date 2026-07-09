@@ -204,6 +204,9 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
+                  # Strands SDK calls the Bedrock Converse API, not raw InvokeModel
+                  - bedrock:Converse
+                  - bedrock:ConverseStream
                 Resource:
                   - 'arn:aws:bedrock:*::foundation-model/anthropic.claude-*'
                   - 'arn:aws:bedrock:*::foundation-model/amazon.nova-*'
@@ -496,7 +499,7 @@ Outputs:
     Value: !Sub 'postgresql://${DBMasterUsername}:<PASSWORD>@${AuroraCluster.Endpoint.Address}:5432/${DBName}'
 
   BedrockRoleArn:
-    Description: IAM Role ARN with Bedrock InvokeModel permissions
+    Description: IAM Role ARN with Bedrock InvokeModel and Converse permissions
     Value: !GetAtt WorkshopBedrockRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-BedrockRoleArn'
