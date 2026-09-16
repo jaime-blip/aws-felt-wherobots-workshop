@@ -60,8 +60,8 @@ Routing examples that are **Run Reference**, not Generate Custom:
   weather) and industries — describe the reference design, surface the
   config-cell knobs (AOI, windows, weights, industry) as choices, then run
   the shipped notebooks. Do not offer to generate notebooks.
-- *"Scope it to San Diego County"* — one line in the config cell
-  (`wkls.us.ca.sandiegocounty.wkt()`), not a custom pipeline.
+- *"Scope it to the City of San Diego"* (the reference is the county) — one line
+  in the config cell (`wkls.us.ca.sandiego.wkt()`), not a custom pipeline.
 - *"Only score for insurance"* — the industry selector, same cell.
 
 **How it runs: the participant runs the notebooks in Kiro.** Open the
@@ -76,8 +76,8 @@ run the notebooks on the participant's behalf.
 
 | Notebook | Runtime | Why |
 |---|---|---|
-| `bronze-to-silver.ipynb` | **Medium** | Raster zonal stats + spatial KNN + cached-buildings shuffle benefit from extra memory. Medium is sized for the San Diego **city** AOI (~358K buildings); for the county or larger use Large or medium-himem. |
-| `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops. About 2.5 minutes for the city AOI. |
+| `bronze-to-silver.ipynb` | **Large** | Raster zonal stats + spatial KNN + cached-buildings shuffle. The reference AOI is San Diego **County** (~1.03M buildings): about 50 min on Large, of which the mesocyclone KNN is 16 min and the 17-week flood loop 9 min. Medium is enough for the city AOI (~358K buildings, about 13 min) but lost executors in the KNN stage under a heavier load. |
+| `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops. About 2.5 minutes for the city AOI, about 6 minutes for the county. |
 
 **Aurora connection on a remote kernel.** The Wherobots kernel runs in
 Wherobots Cloud and cannot see the participant's laptop environment or
