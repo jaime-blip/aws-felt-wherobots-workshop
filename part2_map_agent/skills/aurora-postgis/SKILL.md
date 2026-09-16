@@ -57,9 +57,9 @@ print(f"Layer ID: {result['layer_id']}")
 ## Workshop Data (for reference)
 
 The `workshop` schema contains:
-- `workshop.insurance_exposure` — 1,035,306 buildings, insurance risk scores
+- `workshop.insurance_exposure` — 357,758 buildings (City of San Diego), insurance risk scores
 - `workshop.cre_risk` — Commercial real estate risk scores
-- `workshop.capital_markets_signals` — Capital markets signals (no risk_tier)
+- `workshop.capital_markets_signals` — Capital markets signals
 - `workshop.energy_asset_risk` — Energy infrastructure risk
 
 ## PostGIS Spatial Queries

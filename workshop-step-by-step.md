@@ -9,7 +9,7 @@
 
 ## What You'll Build
 
-An end-to-end geospatial AI pipeline that scores **1,035,306 San Diego buildings** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
+An end-to-end geospatial AI pipeline that scores **357,758 San Diego buildings** (the City of San Diego) for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
 
 **Part 1 — Agentic Data Engineering** (~35 min)
 Walk through a Wherobots MCP-powered medallion pipeline (Bronze → Silver → Gold) that turns satellite imagery and weather events into per-building risk scores stored in Aurora PostgreSQL.
@@ -140,7 +140,7 @@ The outputs table looks like this — `AuroraDSN`, `BedrockRoleArn`, `VpcId`, an
 >   -c "SELECT count(*) FROM workshop.insurance_exposure;"
 > ```
 >
-> Expect ~1,035,306 rows. If empty, see `deploy-aurora/README.md` (the `AuroraSeed` Lambda log in CloudWatch will explain why).
+> Expect ~357,758 rows once the seed has been refreshed from a City of San Diego run (see `deploy-aurora/README.md`); an older seed file holds 1,035,306 county-scale rows. If empty, the `AuroraSeed` Lambda log in CloudWatch will explain why.
 
 > **Region note:** Everything in this workshop runs in `us-west-2` — Aurora,
 > Wherobots, and Bedrock. Make sure your Bedrock model access (above) is enabled
@@ -182,6 +182,8 @@ If you're using Kiro, install the Wherobots extension for integrated catalog bro
 2. Command Palette (Cmd+Shift+P) → **Wherobots: Set API Key** → paste your Wherobots key
 3. The extension auto-configures the MCP server and Data Hub sidebar
 
+> **Always open Kiro with `scripts/kiro.sh`** from the repo root. Kiro fills in the `${WHEROBOTS_API_KEY}`, `${FELT_API_TOKEN}` and `${AURORA_DSN}` placeholders in `.kiro/settings/mcp.json` from the environment it was started with, not from `.env`. Opening Kiro from the Dock leaves the placeholders unresolved and the MCP servers fail. `scripts/kiro.sh --check` shows which values `.env` provides. If the MCP servers panel shows nothing at all, check that **Kiro Agent: Configure MCP** is Enabled in Settings.
+
 To connect notebooks to Wherobots compute (needed for Part 1):
 1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Medium** for `bronze-to-silver`, **Small** for `silver-to-gold`) → **Start**
 2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
@@ -189,7 +191,7 @@ To connect notebooks to Wherobots compute (needed for Part 1):
 
 ### Step 5 — Configure MCP servers
 
-Add both MCP servers to your IDE (Kiro, VS Code, or Claude Desktop):
+Kiro users are done: the repo ships `.kiro/settings/mcp.json` with the Wherobots, Felt and Aurora servers and the read-only tools pre-approved. For VS Code or Claude Desktop, add the same servers to your IDE's MCP settings:
 
 ```json
 {
@@ -327,19 +329,20 @@ This is the Overture Maps building footprint dataset — every building polygon 
 
 This shows actual hail events with location, severity, and timestamp.
 
-**What you're seeing:** The Wherobots MCP queries metadata, not the full tables. Even tables with billions of rows respond instantly because it reads catalog metadata, not data.
+**What you're seeing:** The first two prompts use the catalog and schema tools, which read metadata and return instantly even for tables with billions of rows. The third prompt runs SQL: the first SQL query of a session starts a SQL runtime, which takes about 90 seconds; later queries return in seconds.
 
 **Available datasets:**
 
 | Source | Catalog Table | Type | Description |
 |---|---|---|---|
-| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | ~1M building footprints in San Diego |
-| USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid (32 GB) |
-| USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs |
-| OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m) |
-| NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail events with severity |
-| NOAA SWDI — Mesocyclone | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone detections |
-| NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado vortex signatures |
+| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 2.5 billion footprints worldwide; ~358K in the City of San Diego |
+| USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid, CONUS, 30 m (24 GB) |
+| USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs, CONUS, 30 m (22 GB) |
+| OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m), Southern California, Dec 2025 – Mar 2026 |
+| NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | 25M hail detections, 2024–2025, with severity |
+| NOAA SWDI — Mesocyclone | `org_catalog.noaa_swdi.structure` | Vector | 81M mesocyclone detections, 2024–2025 |
+| NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | 91K tornado vortex signatures, 2024–2025 |
+| NOAA SWDI — Warnings | `org_catalog.noaa_swdi.warn` | Vector | Warning polygons 2001–2016 (archive; not used by the pipeline) |
 
 ### Step 2 — Walkthrough: Bronze → Silver pipeline (10 min)
 
@@ -370,7 +373,14 @@ The Silver layer enriches each building with hazard data through three spatial o
 
 Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies a **4-step scoring framework**:
 
-> **Aurora connection:** the notebook's config cell resolves the Aurora connection automatically — from the `AURORA_DSN` environment variable, or from a `.env` file in the working directory or any parent. If neither is visible to the notebook runtime (e.g., a remote Wherobots kernel), the config cell stops with a clear error — paste your `AURORA_DSN` values into the manual fallback block in that cell. This must be configured for the run, otherwise the 4 Gold tables never land in Aurora and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
+> **Aurora connection:** the notebook runs on a Wherobots kernel, which cannot see your laptop's environment or `.env`. Before running it, run once from the repo root:
+>
+> ```bash
+> set -a; source .env; set +a
+> python3 scripts/upload_env_to_wherobots.py
+> ```
+>
+> This uploads only the `AURORA_DSN` line to your org's Wherobots managed storage and points the notebook's config cell at it. Without it the config cell stops with a clear error, the 4 Gold tables never land in Aurora, and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
 
 **1. Normalize** — Min-max scale each hazard metric to [0, 1]
 **2. Weight** — Apply industry-specific weights:
@@ -382,18 +392,21 @@ Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies
 | Capital Markets | 0.20 | 0.30 | 0.50 | Operational disruption from weather events |
 | Energy & Utilities | 0.40 | 0.20 | 0.40 | Grid infrastructure near vegetation and storm paths |
 
-**3. Classify** — Assign risk tiers:
+**3. Classify** — Assign risk tiers by percentile rank of the score within the area, so every industry gets a comparable distribution regardless of how its raw scores are spread:
 
-| Tier | Score Range |
+| Tier | Percentile of `risk_score` |
 |---|---|
-| High | ≥ 0.60 |
-| Elevated | 0.40 – 0.59 |
-| Moderate | 0.20 – 0.39 |
-| Low | < 0.20 |
+| Critical | top 5% |
+| High | 80th – 95th |
+| Elevated | 50th – 80th |
+| Moderate | 20th – 50th |
+| Low | bottom 20% |
+
+Tied scores are common (most buildings have zero flood and near-zero wildfire), so the realised shares deviate from these cuts: in the City of San Diego run, insurance has 5.0% critical but only 2.2% high and 39.6% elevated.
 
 **4. Derive** — Compute industry-specific metrics (e.g., `triage_priority`, `outage_probability`)
 
-**The weighting matters:** The energy table shows **274,553 buildings as "elevated"** (vs only 140 for insurance) because energy weights both wildfire and weather at 0.40, pushing more buildings above the 0.40 threshold.
+**The weighting matters:** each industry also reads a different aspect of each hazard (insurance uses mean burn probability and flood duration; energy uses flame length and events within 5 km), so the rankings diverge. In the City of San Diego run the insurer flags **17,887 critical** buildings and the utility **5,600**; of the insurer's critical buildings only **746** are critical for the utility and **14,814** are low or moderate. Same data, different lens.
 
 > 📖 See `part1_data_engineering/data_dictionary.md` for the full schema and business logic of every table.
 
@@ -418,10 +431,10 @@ conn.close()
 
 **Expected output:**
 ```
-workshop.insurance_exposure: 1,035,306 rows
-workshop.cre_risk: 1,035,306 rows
-workshop.capital_markets_signals: 1,035,306 rows
-workshop.energy_asset_risk: 1,035,306 rows
+workshop.insurance_exposure: 357,758 rows
+workshop.cre_risk: 357,758 rows
+workshop.capital_markets_signals: 357,758 rows
+workshop.energy_asset_risk: 357,758 rows
 ```
 
 **Explore the risk distribution:**
@@ -434,16 +447,17 @@ You should see:
 
 | Tier | Buildings | Avg Score | Dominant Driver |
 |------|----------|-----------|-----------------|
-| high | 1 | 0.600 | Flood + severe weather |
-| elevated | 140 | 0.447 | Wildfire (avg 0.62) |
-| moderate | 274,613 | 0.201 | Severe weather |
-| low | 84,231 | 0.064 | Low all factors |
+| critical | 17,887 | 0.203 | Severe weather density (0.87); wildfire where it is non-zero |
+| high | 7,990 | 0.172 | Severe weather density |
+| elevated | 141,558 | 0.170 | Severe weather density |
+| moderate | 103,708 | 0.136 | Severe weather density |
+| low | 86,615 | 0.102 | Low all factors |
 
 **What to notice:**
-- Most buildings score `low` or `moderate` — San Diego's risk is **localized, not widespread**
-- The **140 elevated buildings** cluster near Poway and Ramona — the wildland-urban interface where dry brush meets residential development
-- **84% of buildings** have significant severe weather exposure (Santa Ana winds, occasional hail) — that's the baseline
-- Different industry tables weight the **same hazards differently** — a building that's `elevated` for insurance may be only `moderate` for CRE
+- Inside the city limits the composite is dominated by **severe weather density** (hail and mesocyclone detections within 25 km); flood is zero for every tier because only 2,655 of 6 million building-weeks showed satellite-observed water
+- **Wildfire is what separates the tiers at the canyon edges**: within 3 km of Scripps Ranch, where the 2003 Cedar Fire destroyed over 300 homes, 1,454 of 5,802 buildings are high or critical, the weather factor is identical for every tier (0.57) and the wildfire factor runs from 0.30 (critical) to 0.00 (low)
+- Poway, Ramona and Julian are outside the city AOI; a county-scale run (`wkls.us.ca.sandiegocounty.wkt()`, ~1.03M buildings, needs a larger runtime) is what tells the East County wildland-urban-interface story
+- Different industry tables weight the **same hazards differently** and read different metrics — a building that's `critical` for insurance is usually `low` or `moderate` for energy
 
 > **Try it:** *"Query workshop-db: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
 
@@ -454,7 +468,7 @@ You should see:
 - **Spatial operations** (zonal stats, KNN joins) run server-side on Apache Sedona — even billions of rows
 - **JDBC export** moves Gold tables directly from Wherobots to Aurora in minutes
 - The same data pipeline supports **4 different industry verticals** with different scoring weights from identical source data
-- The risk story is **localized**: 140 buildings at the wildfire edge tell a different story than the 274K moderate-risk buildings downtown
+- The risk story is **localized**: 1,454 wildfire-driven high/critical buildings around Scripps Ranch tell a different story than the weather-driven central neighbourhoods
 
 ---
 
