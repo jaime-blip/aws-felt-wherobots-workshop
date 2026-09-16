@@ -233,15 +233,16 @@ Target audience: Quantitative analysts, equity researchers, supply chain risk te
 | `asset_id`, `geometry`, `building_class` | Asset identifiers |
 | `wildfire_factor`, `flood_factor`, `severe_weather_factor` | Normalized [0–1] hazard factors |
 | `risk_score` | Weighted composite (wf 0.20, fl 0.30, sw 0.50) |
-| `disruption_probability` | Modeled likelihood of facility going offline |
-| `supply_chain_vulnerability` | Proximity-weighted risk index |
-| `event_signal_strength` | Intensity of current severe weather conditions |
+| `risk_tier` | Percentile-rank tier: critical / high / elevated / moderate / low (same rule as the other Gold tables) |
+| `disruption_signal` | Relative likelihood of a facility going offline (ranking signal, not a calibrated probability) |
+| `supply_chain_vulnerability` | Proximity-weighted risk index, bounded [0, 1] |
+| `event_density_signal` | Geometric mean of the severe weather factor and proximity |
 | `score_explanation` | JSON breakdown of factor weights and values |
 
 **Business logic**:
-- `disruption_probability` = sigmoid function: `1 / (1 + e^(-10 × (risk_score - 0.5)))` — maps the linear risk score to a probability curve centered at 0.5
-- `supply_chain_vulnerability` = `1 / log(1 + nearest_event_km)` — inverse-log distance weighting where closer events produce higher vulnerability; uses geodesic distance converted from meters to km
-- `event_signal_strength` = the normalized severe weather factor (0–1), representing how anomalous current weather conditions are relative to the population
+- `disruption_signal` = sigmoid function: `1 / (1 + e^(-10 × (risk_score - 0.5)))` — maps the linear risk score to an S-curve centered at 0.5
+- `supply_chain_vulnerability` = `min(1, 1 / log(1 + nearest_event_km))` — inverse-log distance weighting where closer events produce higher vulnerability; uses geodesic distance converted from meters to km
+- `event_density_signal` = `sqrt(severe_weather_factor × supply_chain_vulnerability)`
 
 ---
 
