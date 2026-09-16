@@ -12,9 +12,10 @@ Why this wrapper exists:
     from arbitrary Wherobots orgs, so we shuttle bootstrap.py through
     your own managed storage as a transit point.
 
-Usage (from the cloned workshop repo):
+Usage (from the cloned workshop repo, with WHEROBOTS_API_KEY set in .env):
 
-    WHEROBOTS_API_KEY=<your-api-key> python3 scripts/run_bootstrap.py
+    python3 scripts/run_bootstrap.py              # run the bootstrap
+    python3 scripts/run_bootstrap.py --check-key  # only verify the key works
 
 Requires Python 3.8+ and curl on PATH. Pure stdlib otherwise.
 Idempotent — re-runs replace the uploaded script and create a fresh
@@ -51,12 +52,35 @@ TERMINAL_STATES = ("COMPLETED", "FAILED", "CANCELLED")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
+# Prefer the repo's .env over the shell environment. Participants put the key
+# in .env (Lab 01), but many machines also export a stale WHEROBOTS_API_KEY in
+# ~/.zshrc, and Kiro's command tool runs an interactive shell that sources it,
+# so the shell value silently wins and every API call returns 401.
 
-API_KEY = os.environ.get("WHEROBOTS_API_KEY")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _key_from_dotenv():
+    path = os.path.join(REPO_ROOT, ".env")
+    if not os.path.isfile(path):
+        return None, None
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if line.startswith("WHEROBOTS_API_KEY="):
+                value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if value and not value.startswith("your-"):
+                    return value, path
+    return None, None
+
+
+API_KEY, KEY_SOURCE = _key_from_dotenv()
+if not API_KEY:
+    API_KEY, KEY_SOURCE = os.environ.get("WHEROBOTS_API_KEY"), "the shell environment"
 if not API_KEY:
     sys.exit(
         "Missing WHEROBOTS_API_KEY. Generate one at https://cloud.wherobots.com/ "
-        "and re-run with WHEROBOTS_API_KEY=<key> in your environment."
+        "and put it in the repo's .env (see .env.example)."
     )
 
 
@@ -76,7 +100,14 @@ def api(method, path, body=None, query=None):
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        sys.exit(f"Wherobots API error {e.code} on {method} {path}:\n{body}")
+        hint = ""
+        if e.code == 401:
+            hint = (
+                f"\nThe API key came from {KEY_SOURCE}. If your shell also exports "
+                "WHEROBOTS_API_KEY (check ~/.zshrc), that value may be stale; the key in "
+                "the repo's .env is the one the workshop uses."
+            )
+        sys.exit(f"Wherobots API error {e.code} on {method} {path}:\n{body}{hint}")
 
 
 def step(msg):
@@ -86,6 +117,13 @@ def step(msg):
 # ── Workflow ──────────────────────────────────────────────────────────────────
 
 def main():
+    print(f"   using WHEROBOTS_API_KEY from {KEY_SOURCE} (ends …{API_KEY[-4:]})")
+    if "--check-key" in sys.argv:
+        step("checking the API key against Wherobots")
+        api("GET", "/storage")
+        print("   OK: key accepted")
+        return 0
+
     # 1. Find this org's managed storage integration
     step("looking up your managed storage integration")
     integrations = api("GET", "/storage")
