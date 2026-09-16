@@ -10,7 +10,7 @@
 
 ## The Data Story
 
-**1,035,306 San Diego buildings** scored for wildfire, flood, and severe weather risk across 4 industry verticals (insurance, commercial real estate, capital markets, energy). The wildland-urban interface near Poway and Ramona — where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods — is where risk concentrates. Same buildings, different scores depending on who's asking.
+**1,027,269 San Diego County buildings** scored for wildfire, flood, and severe weather risk across 4 industry verticals (insurance, commercial real estate, capital markets, energy). The wildland-urban interface near Ramona, Julian and Poway — where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods — is where risk concentrates: within 3 km of Ramona every building scores high or critical for insurance, while downtown San Diego has none. Same buildings, different scores depending on who's asking.
 
 ---
 
