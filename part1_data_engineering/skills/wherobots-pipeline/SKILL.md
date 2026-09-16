@@ -34,7 +34,7 @@ same chat; infer the mode from the participant's prompt.
 Participant is asking about the catalog, data shape, sample values,
 "what do I have?". Use the Wherobots MCP discovery tools — `list_catalogs`,
 `list_databases`, `list_tables`, `describe_table`, optionally
-`execute_query_tool` for ad-hoc SELECTs. **Do not modify any files.**
+`submit_query_tool` for ad-hoc SELECTs. **Do not modify any files.**
 
 If `org_catalog` is empty or missing the workshop bronze tables, do
 not just report "it's empty" — follow the **Empty catalog** rule
@@ -53,40 +53,42 @@ a different industry already in `INDUSTRY_FACTORS` is a parameter edit
 — make it in the reference notebook's config cell and re-run. No new
 notebook needed.
 
-**Before dispatching — ask the participant how they want to run it.**
-Two real paths, not a technicality:
+Routing examples that are **Run Reference**, not Generate Custom:
 
-- **Participant runs it in Kiro** — open the notebook, attach a
-  Wherobots runtime, execute cells one at a time. Output (tables,
-  sample rows, distributions) renders inline in each cell; the
-  participant can pause, inspect, tweak the config cell, re-run. Agent
-  narrates in domain language what each step is doing and helps
-  interpret results. Best for participants who want to learn what's
-  happening or who plan to iterate on design choices.
-- **Agent runs it** — agent submits via the Wherobots Runs API (e.g.
-  `scripts/run_notebook.py`), streams logs, reports results at the
-  end. One-shot, linear, terminal-style. Best for quick runs or
-  re-runs after a known-good config is settled.
-  When the agent dispatches, the agent **owns monitoring that run to
-  completion**. Poll `GET /runs/{id}` on a short interval, track the
-  run ID, and surface the terminal status (`COMPLETED` / `FAILED` /
-  `CANCELLED`) proactively — don't wait for the participant to ask
-  *"is it done?"*, and never claim to not know the status of a run
-  you dispatched.
+- *"Design the pipeline for San Diego"* / *"design it following the
+  workshop's approach"* for the shipped hazards (wildfire, flood, severe
+  weather) and industries — describe the reference design, surface the
+  config-cell knobs (AOI, windows, weights, industry) as choices, then run
+  the shipped notebooks. Do not offer to generate notebooks.
+- *"Scope it to San Diego County"* — one line in the config cell
+  (`wkls.us.ca.sandiegocounty.wkt()`), not a custom pipeline.
+- *"Only score for insurance"* — the industry selector, same cell.
 
-Ask once at the first dispatch this session, remember the preference
-for subsequent runs, let the participant override any time. No
-default — surface it as a real choice.
+**How it runs: the participant runs the notebooks in Kiro.** Open the
+notebook, attach a Wherobots workspace, execute cells top to bottom. Output
+(tables, sample rows, distributions) renders inline in each cell; the
+participant can pause, inspect, tweak the config cell, re-run. The agent
+narrates in domain language what each step is doing and helps interpret
+results. There is no agent-side dispatcher in this repo; do not offer to
+run the notebooks on the participant's behalf.
 
-**Runtime sizing** (when the agent is dispatching):
+**Runtime sizing** — offer this when the participant attaches a workspace:
 
 | Notebook | Runtime | Why |
 |---|---|---|
-| `bronze-to-silver.ipynb` | **Medium** | Raster zonal stats + spatial KNN + cached-buildings shuffle benefit from extra memory |
-| `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops |
+| `bronze-to-silver.ipynb` | **Medium** | Raster zonal stats + spatial KNN + cached-buildings shuffle benefit from extra memory. Medium is sized for the San Diego **city** AOI (~358K buildings); for the county or larger use Large or medium-himem. |
+| `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops. About 2.5 minutes for the city AOI. |
 
-When the participant runs cells themselves in Kiro, offer the same
-sizing guidance when they attach a workspace.
+**Aurora connection on a remote kernel.** The Wherobots kernel runs in
+Wherobots Cloud and cannot see the participant's laptop environment or
+`.env`. Before the Gold run, the participant runs once from the repo root:
+
+    set -a; source .env; set +a
+    python3 scripts/upload_env_to_wherobots.py
+
+It uploads only the `AURORA_DSN` line to their org's managed storage and
+points the notebook at it. Never tell a participant to "set AURORA_DSN in
+your environment" for a remote kernel; it has no effect there.
 
 **Reporting Gold completion — one row per industry, same shape.**
 When all four Gold tables land (`insurance_exposure`, `cre_risk`,
@@ -249,6 +251,20 @@ Custom.
    bullet list over a wall of prose. Lead with the headline number,
    support with the breakdown, close with a one-line interpretation.
 
+7. **Every number comes from a tool call.** Resolution, tile size, coverage
+   dates, row counts, distances: if you did not query it in this session,
+   query it or say you have not. Do not fill in from memory. Rehearsal
+   examples of guessed numbers that were wrong: "~384 m resolution" (30 m),
+   "~3.8 km² tiles" (~15 km²), "flood data from May 2025" (Dec 2025).
+
+8. **Attribute by what varies, not by what is largest.** When asked which
+   hazard *drives* a tier, a ranking or a hot spot, compare the factor
+   means across tiers (or against the low tier). A factor that is identical
+   for every tier cannot drive the ranking, however large its value. In
+   rehearsal the agent named the largest factor (severe weather, 0.57 in
+   every tier) when the only factor that changed between tiers was wildfire
+   (0.30 critical vs 0.00 low).
+
 ---
 
 ## Workflow (for Generate Custom mode only)
@@ -273,9 +289,13 @@ Non-obvious and not enforced by the MCP:
   documentation or dataset names.
 - For rasters: sample `RS_Metadata(raster)` to confirm source CRS and pixel
   scale. Check band distributions via `SELECT DISTINCT band FROM ...`.
-- `generate_spatial_query_tool` and `execute_query_tool` are useful for
+- `generate_spatial_query_tool` and `submit_query_tool` are useful for
   ad-hoc exploration SELECTs during discovery; for notebook cells,
   generate SQL directly using the rules in this skill.
+- For every time-varying source, query `MIN`/`MAX` of its date column (and
+  the row count inside the AOI) before proposing any temporal window.
+  Proposed windows must lie inside the measured coverage. In rehearsal the
+  agent proposed a flood window with zero data in it because it guessed.
 
 Onboard: name each dataset + explain its rows + include a row count so
 the participant feels the scale (rules 1, 2, 4). Present discovered
@@ -313,7 +333,7 @@ participant sees the artifact (rules 3, 4, 6).
 
 ### Phase 6 — Verification & Reconciliation
 
-Use `execute_query_tool` to verify every table (`COUNT(*)` + `LIMIT 5`).
+Use `submit_query_tool` to verify every table (`COUNT(*)` + `LIMIT 5`).
 If notebook generation drifted from the original design (renamed tables,
 dropped columns), update the docs to match.
 
