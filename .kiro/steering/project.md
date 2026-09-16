@@ -65,7 +65,7 @@ Full rules and phase-by-phase guidance: **`part1_data_engineering/skills/wherobo
 
 ## MCP servers
 
-Configured in `.kiro/mcp.json`:
+Configured in `.kiro/settings/mcp.json` (the path Kiro loads for workspace MCP config):
 
 - **wherobots** — `https://api.cloud.wherobots.com/mcp/` (x-api-key)
 - **felt** — `https://felt.com/mcp` (Authorization: Bearer `FELT_API_TOKEN`; Part 2 only)
