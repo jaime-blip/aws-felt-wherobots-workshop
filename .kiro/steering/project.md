@@ -37,8 +37,8 @@ part collaborator, part teacher — not to grind through a prebaked demo.
 
 On each turn, triage which mode the participant is in:
 
-- **Explore** — "what data do I have?", "show me storm events near Poway", "describe this table". Use the Wherobots MCP's discovery tools (`list_catalogs`, `list_tables`, `describe_table`, `execute_query_tool`). No file writes.
-- **Run Reference** — "run the workshop pipeline", "score San Diego for insurance", **"score Seattle for insurance" (AOI tweak)**, **"use wildfire=0.5 weights" (weights tweak)**, "swap to the CRE industry" (selector in `INDUSTRY_FACTORS`). Execute `part1_data_engineering/bronze-to-silver.ipynb` then `silver-to-gold.ipynb`. Config-cell parameter edits (AOI, weights, windows, industry selector) belong in the reference notebook — don't create a new one. **Runtime sizing when dispatching: Medium for `bronze-to-silver`, Small for `silver-to-gold`** (raster zonal stats + spatial KNN need the extra memory; Gold is SQL-only).
+- **Explore** — "what data do I have?", "show me storm events near Poway", "describe this table". Use the Wherobots MCP's discovery tools (`list_catalogs`, `list_tables`, `describe_table`, `submit_query_tool`). No file writes.
+- **Run Reference** — "run the workshop pipeline", "score San Diego for insurance", **"score Seattle for insurance" (AOI tweak)**, **"use wildfire=0.5 weights" (weights tweak)**, "swap to the CRE industry" (selector in `INDUSTRY_FACTORS`). Execute `part1_data_engineering/bronze-to-silver.ipynb` then `silver-to-gold.ipynb`. Config-cell parameter edits (AOI, weights, windows, industry selector) belong in the reference notebook — don't create a new one. "Design the pipeline for San Diego" for the shipped hazards and industries is also Run Reference: describe the reference design, offer the config-cell knobs as choices, then run the shipped notebooks; never offer to generate notebooks for an AOI or weight change. The participant runs the notebooks in Kiro (there is no agent-side dispatcher). **Runtime sizing: Medium for `bronze-to-silver` (city AOI), Small for `silver-to-gold`** (raster zonal stats + spatial KNN need the extra memory; Gold is SQL-only).
 - **Generate Custom** — analysis changes the config cell can't express: a new hazard source ("add lightning-strike exposure"), a new industry not in `INDUSTRY_FACTORS` ("score for agriculture"), new derived metrics, or a different scoring structure. Generate new notebooks under `part1_data_engineering/custom-pipelines/<short-name>/`. Follow every rule in the `wherobots-pipeline` skill. `scripts/bootstrap.py` and `scripts/run_bootstrap.py` are never modified.
 
 ### Empty catalog
@@ -61,6 +61,9 @@ Participants are domain experts — underwriters, CRE analysts, capital markets 
 - **Collaborate on design choices.** Where the skill's rules allow multiple valid answers (weights, source metrics, windows), present options with tradeoffs — don't pre-pick.
 - **Narrate substantively. Show data at decisions and endpoints.** Exploration lines should report what you *learned*, not what command you ran. *"Let me check the schema"* is noise — cut it. Save full tables/sample rows for analysis endpoints. When reporting multi-faceted findings, prefer a table to a wall of prose.
 
+- **Every number comes from a tool call.** Coverage dates, resolution, tile size, row counts: query it or say you have not. For any time-varying source, query the date range before proposing a window.
+- **Attribute by what varies, not what is largest.** "Which hazard drives this?" means compare factor means across tiers; a factor identical in every tier drives nothing.
+
 Full rules and phase-by-phase guidance: **`part1_data_engineering/skills/wherobots-pipeline/SKILL.md`**.
 
 ## MCP servers
@@ -71,7 +74,7 @@ Configured in `.kiro/settings/mcp.json` (the path Kiro loads for workspace MCP c
 - **felt** — `https://felt.com/mcp` (Authorization: Bearer `FELT_API_TOKEN`; Part 2 only)
 - **postgres** — Aurora DSN (Part 2 only)
 
-Participants set `WHEROBOTS_API_KEY`, `FELT_API_TOKEN`, and `AURORA_DSN` in their shell env before opening Kiro or VS Code.
+Participants fill in `.env` and launch Kiro with `scripts/kiro.sh`, which exports it (Kiro resolves the `${VAR}` placeholders from the environment it was started with, not from `.env`). The Wherobots notebook kernel is remote and cannot see `.env` either; before the Gold run the participant runs `python3 scripts/upload_env_to_wherobots.py` once.
 
 ## Pointers
 
