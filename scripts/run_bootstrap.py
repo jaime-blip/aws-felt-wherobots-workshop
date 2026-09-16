@@ -15,6 +15,7 @@ Why this wrapper exists:
 Usage (from the cloned workshop repo, with WHEROBOTS_API_KEY set in .env):
 
     python3 scripts/run_bootstrap.py              # run the bootstrap
+    python3 scripts/run_bootstrap.py --verbose    # also show Spark/platform log lines
     python3 scripts/run_bootstrap.py --check-key  # only verify the key works
 
 Requires Python 3.8+ and curl on PATH. Pure stdlib otherwise.
@@ -24,6 +25,7 @@ Wherobots job run.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -49,6 +51,31 @@ TIMEOUT_SEC = 1800
 
 POLL_INTERVAL_SEC = 4
 TERMINAL_STATES = ("COMPLETED", "FAILED", "CANCELLED")
+
+# Lines the Wherobots run wrapper and the JVM emit before/around the job. They
+# are not about the bootstrap and they scare participants, so the default view
+# hides them. Pass --verbose to see the raw stream. Errors are always shown.
+VERBOSE = "--verbose" in sys.argv
+NOISE_PATTERNS = [
+    r"^\d{2}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|WARN) ",   # Spark/Sedona log lines below ERROR
+    r"^WARNING: Using incubator modules",
+    r"^Using Spark's default log4j profile",
+    r"^Setting (default |Spark )?log level",
+    r"^To adjust logging level",
+    r"^(Creating spark-logs|Spark event log folder|Downloading file|File downloaded|Uploading file|Running spark submit)",
+    r"^::::::$",
+    r"^/opt/spark/bin/spark-submit",
+    r"^\s*[{}]\s*$",                                            # the S3 upload response JSON block
+    r"^\s*\"(ETag|ChecksumCRC32|ChecksumType|ServerSideEncryption|VersionId)\":",
+    r"^Subprocess finished with return code: 0$",
+    r"^\[Stage \d+:",                                            # console progress bars
+]
+NOISE_RE = re.compile("|".join(f"(?:{p})" for p in NOISE_PATTERNS))
+KEEP_RE = re.compile(r"ERROR|Exception|Traceback|error:", re.IGNORECASE)
+
+
+def _is_noise(line):
+    return bool(NOISE_RE.search(line)) and not KEEP_RE.search(line)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -218,13 +245,15 @@ def main():
                     continue
                 seen.add(key)
                 line = (item.get("raw") or "").rstrip()
-                if line:
+                if line and (VERBOSE or not _is_noise(line)):
                     print(line, flush=True)
 
         status_resp = api("GET", f"/runs/{run_id}")
         status = status_resp.get("status")
         if status != last_status:
             print(f"   ── status: {status}", flush=True)
+            if status == "RUNNING" and not VERBOSE:
+                print("   (Spark is starting; the first table usually appears after about 2 minutes)", flush=True)
             last_status = status
         if status in TERMINAL_STATES:
             break

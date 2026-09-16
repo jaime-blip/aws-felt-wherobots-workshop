@@ -85,8 +85,10 @@ config = (
         "spark.hadoop.fs.s3a.bucket.wherobots-examples.aws.credentials.provider",
         "org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider",
     )
+    .config("spark.ui.showConsoleProgress", "false")
     .getOrCreate()
 )
+config.sparkContext.setLogLevel("ERROR")  # participants read this log; keep it to our own progress lines and real errors
 sedona = SedonaContext.create(config)
 
 
