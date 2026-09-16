@@ -32,9 +32,22 @@ NOTEBOOK = os.path.join(REPO, "part1_data_engineering", "silver-to-gold.ipynb")
 DRY_RUN = "--dry-run" in sys.argv
 ARGS = [a for a in sys.argv[1:] if a != "--dry-run"]
 
-key = os.environ.get("WHEROBOTS_API_KEY")
+def _key_from_dotenv(path):
+    if not os.path.isfile(path):
+        return None
+    for line in open(path):
+        line = line.strip()
+        if line.startswith("WHEROBOTS_API_KEY="):
+            v = line.split("=", 1)[1].strip().strip('"').strip("'")
+            if v and not v.startswith("your-"):
+                return v
+    return None
+
+
+# Prefer .env over the shell: a stale export in ~/.zshrc otherwise wins inside Kiro's command tool.
+key = _key_from_dotenv(os.path.join(REPO, ".env")) or os.environ.get("WHEROBOTS_API_KEY")
 if not key:
-    sys.exit("set WHEROBOTS_API_KEY first (e.g. `set -a; source .env; set +a`)")
+    sys.exit("WHEROBOTS_API_KEY not found in .env or the environment")
 
 env_path = ARGS[0] if ARGS else os.path.join(REPO, ".env")
 lines = [l for l in open(env_path) if l.startswith("AURORA_DSN=")]

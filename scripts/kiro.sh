@@ -19,6 +19,13 @@ set -a
 # shellcheck disable=SC1091
 . ./.env
 set +a
+for rc in ~/.zshenv ~/.zprofile ~/.zshrc ~/.bash_profile ~/.bashrc ~/.profile; do
+  if [ -f "$rc" ] && grep -Eq '^[[:space:]]*export[[:space:]]+WHEROBOTS_API_KEY=' "$rc"; then
+    echo "WARNING: $rc exports WHEROBOTS_API_KEY. Kiro's command tool runs an interactive shell that" >&2
+    echo "         sources it, so that value overrides .env for anything the agent runs. The workshop" >&2
+    echo "         scripts read .env directly, but if you see 401 errors, remove or comment out that export." >&2
+  fi
+done
 if [ "${1:-}" = "--check" ]; then
   for v in WHEROBOTS_API_KEY FELT_API_TOKEN AURORA_DSN FELT_SOURCE_NAME; do
     val="${!v:-}"
