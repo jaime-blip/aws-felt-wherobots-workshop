@@ -80,6 +80,7 @@ CREATE TABLE workshop.capital_markets_signals (
     flood_factor               DOUBLE PRECISION,
     severe_weather_factor      DOUBLE PRECISION,
     risk_score                 DOUBLE PRECISION NOT NULL,
+    risk_tier                  TEXT NOT NULL,
     disruption_signal          DOUBLE PRECISION,
     supply_chain_vulnerability DOUBLE PRECISION,
     event_density_signal       DOUBLE PRECISION,
