@@ -46,7 +46,7 @@ org_catalog.<data_domain>.<source_dataset>
 Examples:
 - `org_catalog.noaa_swdi.hail`
 - `org_catalog.wildfire_risk.burn_probability_conus`
-- `org_catalog.modis.MCDWD_L3_F3_NRT`
+- `org_catalog.opera.dswx_s1`
 
 ### Required Metadata Columns
 
