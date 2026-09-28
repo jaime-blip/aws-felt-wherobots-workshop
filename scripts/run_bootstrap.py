@@ -141,6 +141,21 @@ def step(msg):
     print(f"━━ {msg}", flush=True)
 
 
+def bootstrap_in_flight():
+    """Return the pending or running bootstrap run for this org, if there is one.
+
+    The wrapper streams logs for minutes, and agent command tools (Kiro's returns
+    after 30 s) tempt a second launch while the first job is still going. Two
+    bootstraps racing on the same tables cost double and fail on concurrent
+    Iceberg commits, so we refuse to submit while one is in flight."""
+    runs = api("GET", "/runs", query={"region": REGION, "size": 50})
+    items = runs.get("items", []) if isinstance(runs, dict) else runs
+    for run in items:
+        if run.get("name") == RUN_NAME and str(run.get("status", "")).upper() in ("PENDING", "RUNNING"):
+            return run
+    return None
+
+
 # ── Workflow ──────────────────────────────────────────────────────────────────
 
 def main():
@@ -149,6 +164,14 @@ def main():
         step("checking the API key against Wherobots")
         api("GET", "/storage")
         print("   OK: key accepted")
+        return 0
+
+    # 0. Refuse to start a second bootstrap while one is already going
+    running = bootstrap_in_flight()
+    if running:
+        print(f"━━ a bootstrap run is already {running['status'].lower()}: {running['id']}")
+        print(f"   monitor at: https://cloud.wherobots.com/jobs/{running['id']}")
+        print("   not submitting another; run this command again once it has finished.")
         return 0
 
     # 1. Find this org's managed storage integration
