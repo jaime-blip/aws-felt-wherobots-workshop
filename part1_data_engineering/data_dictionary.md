@@ -93,7 +93,7 @@ Per-building, **per-ISO-week** flood exposure derived from OPERA DSWx-S1 SAR flo
 | `asset_type` | Always `building` |
 | `geometry` | Building footprint polygon |
 | `flood_week` | Monday-aligned ISO week start date for this observation |
-| `flood_max_wtr_class` | Max OPERA water classification observed that week (0=dry, 1=open water, 2=partial surface water) |
+| `flood_max_wtr_class` | Max OPERA B01_WTR water class observed that week (0=not water, 1=open water, 3=inundated vegetation); terrain-mask and no-data pixels are excluded |
 | `observation_window_start` | `FLOOD_WINDOW_START` — pipeline parameter |
 | `observation_window_end` | `FLOOD_WINDOW_END` — pipeline parameter |
 | `computed_at` | Processing timestamp |
