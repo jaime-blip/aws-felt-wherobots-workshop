@@ -185,7 +185,7 @@ If you're using Kiro, install the Wherobots extension for integrated catalog bro
 > **Always open Kiro with `scripts/kiro.sh`** from the repo root. Kiro fills in the `${WHEROBOTS_API_KEY}`, `${FELT_API_TOKEN}` and `${AURORA_DSN}` placeholders in `.kiro/settings/mcp.json` from the environment it was started with, not from `.env`. Opening Kiro from the Dock leaves the placeholders unresolved and the MCP servers fail. `scripts/kiro.sh --check` shows which values `.env` provides. If the MCP servers panel shows nothing at all, check that **Kiro Agent: Configure MCP** is Enabled in Settings.
 
 To connect notebooks to Wherobots compute (needed for Part 1):
-1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Large** for `bronze-to-silver`, about 50 minutes for San Diego County; **Small** for `silver-to-gold`, about 6 minutes) → **Start**
+1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Large** for `bronze-to-silver`, about 35 minutes for San Diego County; **Small** for `silver-to-gold`, about 6 minutes) → **Start**
 2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
 3. Code now executes on Wherobots Cloud (Sedona)
 
