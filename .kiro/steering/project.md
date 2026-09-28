@@ -46,8 +46,8 @@ On each turn, triage which mode the participant is in:
 If `org_catalog.{noaa_swdi,opera,wildfire_risk}` tables don't exist yet when the participant asks to explore or run:
 
 1. Don't just say "run bootstrap."
-2. Introduce what the workshop's bronze layer contains (NOAA SWDI storm radar; OPERA Sentinel-1 SAR flood; USFS wildfire rasters).
-3. Offer to run `python3 scripts/run_bootstrap.py` (~4 min on Tiny).
+2. Introduce what the workshop's bronze layer contains, one line each and nothing beyond this: NOAA NEXRAD radar detections for 2024 and 2025 across the US (hail signatures, storm cells of any intensity, tornado vortex signatures) plus an archive of NWS warning polygons from 2001 to 2016; OPERA surface-water maps from Sentinel-1 radar over the San Diego area, one pass every 6 to 12 days, December 2025 to March 2026; USFS Wildfire Risk to Communities rasters for the continental US (annual burn probability, conditional flame length). Nothing else is ingested: no lightning, no optical imagery, no mesocyclone product.
+3. Offer to run `python3 scripts/run_bootstrap.py` (minutes on Tiny). Run it once, as a background process, and poll its output; never start it a second time while the first is going, since Kiro's command tool returns after 30 s while the job keeps running on Wherobots. Report the run id and monitor URL it prints; the wrapper refuses to submit while a bootstrap run is already in flight.
 4. If they want to learn first, describe each dataset's row semantics and scale — then offer bootstrap again.
 
 ### How to talk to the participant

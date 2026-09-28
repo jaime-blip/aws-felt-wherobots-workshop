@@ -143,7 +143,7 @@ bootstrap"**. Use it as an onboarding moment:
      — USFS CONUS wildfire burn probability + flame length rasters
 3. Offer to run the bootstrap:
    > *"I can kick off `python3 scripts/run_bootstrap.py` to load all
-   > seven bronze tables (~4 min on Tiny), or I can keep explaining
+   > seven bronze tables (a few minutes on Tiny; I run it once and poll), or I can keep explaining
    > what each dataset contains first. Which do you prefer?"*
 4. If they choose to bootstrap: run it, stream progress. If they want
    to learn first: describe each dataset's row semantics, typical use
