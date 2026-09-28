@@ -103,7 +103,7 @@ The system has two parts — one for data engineering, one for end-user explorat
 | Dataset | Source | Type | Catalog Table |
 |---------|--------|------|---------------|
 | NOAA SWDI — Hail | [AWS Open Data](https://registry.opendata.aws/noaa-swdi/) | Vector | `org_catalog.noaa_swdi.hail` |
-| NOAA SWDI — Mesocyclone | AWS Open Data | Vector | `org_catalog.noaa_swdi.structure` |
+| NOAA SWDI — Storm cell structure | AWS Open Data | Vector | `org_catalog.noaa_swdi.structure` |
 | NOAA SWDI — TVS | AWS Open Data | Vector | `org_catalog.noaa_swdi.tvs` |
 | OPERA DSWx-S1 | [NASA JPL](https://www.jpl.nasa.gov/go/opera) | Raster (Sentinel-1 SAR, 30 m) | `org_catalog.opera.dswx_s1` |
 | USFS Burn Probability | [wildfirerisk.org](https://wildfirerisk.org/) | Raster (COG) | `org_catalog.wildfire_risk.burn_probability_conus` |

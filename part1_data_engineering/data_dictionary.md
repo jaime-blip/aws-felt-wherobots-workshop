@@ -37,7 +37,7 @@ These are catalog-registered datasets consumed directly from Wherobots Open Data
 | USFS Conditional Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | CONUS-wide conditional flame length grids from USFS (expected flame length if fire occurs) |
 | OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR-derived surface water / flood classification (30 m, per-acquisition) |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail event reports with severity probability and max hail size |
-| NOAA SWDI — Mesocyclone Structures | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone structure detections with max reflectivity and VIL |
+| NOAA SWDI — Storm cell structure | `org_catalog.noaa_swdi.structure` | Vector | Radar-identified storm cells of any intensity, with max reflectivity, VIL and cell base/top heights (NEXRAD storm cell structure product; not mesocyclones) |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado Vortex Signature detections with max delta velocity and max shear |
 
 ### Scope Filters Applied at Ingestion
@@ -115,10 +115,10 @@ Per-building severe weather proximity and density derived from NOAA SWDI via KNN
 | `event_count_25km` | Total severe weather events within 25 km |
 | `nearest_event_dist_m` | Distance to the single nearest event of any type (meters) |
 | `nearest_hail_m` | Distance to the nearest hail event (meters) |
-| `nearest_structure_m` | Distance to the nearest mesocyclone structure event (meters) |
+| `nearest_structure_m` | Distance to the nearest radar-identified storm cell (meters) |
 | `nearest_tvs_m` | Distance to the nearest TVS event (meters) |
 | `hail_count_25km` | Hail events within 25 km |
-| `structure_count_25km` | Mesocyclone structure events within 25 km |
+| `structure_count_25km` | Radar-identified storm cells within 25 km, of any intensity |
 | `tvs_count_25km` | TVS events within 25 km |
 | `max_severity` | Maximum severity value across all matched events |
 | `observation_window_start` | `WEATHER_WINDOW_START` — pipeline parameter |

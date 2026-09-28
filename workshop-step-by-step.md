@@ -319,7 +319,7 @@ The Wherobots MCP connects to a massive catalog of geospatial data. Let's explor
 
 > *"What tables are available in org_catalog.noaa_swdi?"*
 
-This shows the severe weather datasets: hail events, mesocyclone detections, and tornado vortex signatures.
+This shows the severe weather datasets: hail events, radar-identified storm cells, and tornado vortex signatures.
 
 > *"Describe the schema of wherobots_open_data.overture_maps_foundation.buildings_building"*
 
@@ -340,7 +340,7 @@ This shows actual hail events with location, severity, and timestamp.
 | USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs, CONUS, 30 m (22 GB) |
 | OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m), Southern California, Dec 2025 – Mar 2026 |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | 25M hail detections, 2024–2025, with severity |
-| NOAA SWDI — Mesocyclone | `org_catalog.noaa_swdi.structure` | Vector | 81M mesocyclone detections, 2024–2025 |
+| NOAA SWDI — Storm cell structure | `org_catalog.noaa_swdi.structure` | Vector | 81M radar-identified storm cells of any intensity (max reflectivity, VIL, cell heights), 2024–2025 |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | 91K tornado vortex signatures, 2024–2025 |
 | NOAA SWDI — Warnings | `org_catalog.noaa_swdi.warn` | Vector | Warning polygons 2001–2016 (archive; not used by the pipeline) |
 
@@ -365,7 +365,7 @@ The Silver layer enriches each building with hazard data through three spatial o
 **Severe weather density** — KNN spatial join (`ST_KNN`):
 | Input | Operation | Output |
 |-------|-----------|--------|
-| Overture Buildings + NOAA SWDI (hail, mesocyclone, TVS) | Find 10 nearest weather events within 25km | `asset_weather_density` — event counts at 5km and 25km thresholds |
+| Overture Buildings + NOAA SWDI (hail, storm cells, TVS) | Find 10 nearest weather events within 25km | `asset_weather_density` — event counts at 5km and 25km thresholds |
 
 > **Try it yourself:** Ask the Wherobots MCP: *"How many hail events occurred within 25km of downtown San Diego (32.72, -117.16) in the past year?"*
 

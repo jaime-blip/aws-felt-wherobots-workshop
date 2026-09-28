@@ -76,7 +76,7 @@ run the notebooks on the participant's behalf.
 
 | Notebook | Runtime | Why |
 |---|---|---|
-| `bronze-to-silver.ipynb` | **Large** | Raster zonal stats + spatial KNN + cached-buildings shuffle. The reference AOI is San Diego **County** (~1.03M buildings): about 50 min on Large, of which the mesocyclone KNN is 16 min and the 17-week flood loop 9 min. Medium is enough for the city AOI (~358K buildings, about 13 min) but lost executors in the KNN stage under a heavier load. |
+| `bronze-to-silver.ipynb` | **Large** | Raster zonal stats + spatial KNN + cached-buildings shuffle. The reference AOI is San Diego **County** (~1.03M buildings): about 50 min on Large, of which the storm-cell KNN is 16 min and the 17-week flood loop 9 min. Medium is enough for the city AOI (~358K buildings, about 13 min) but lost executors in the KNN stage under a heavier load. |
 | `silver-to-gold.ipynb` | **Small** | SQL-only on pre-joined Silver tables — no spatial joins or raster ops. About 2.5 minutes for the city AOI, about 6 minutes for the county. |
 
 **Aurora connection on a remote kernel.** The Wherobots kernel runs in
