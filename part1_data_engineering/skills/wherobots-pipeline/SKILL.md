@@ -36,6 +36,15 @@ Participant is asking about the catalog, data shape, sample values,
 `list_databases`, `list_tables`, `describe_table`, optionally
 `submit_query_tool` for ad-hoc SELECTs. **Do not modify any files.**
 
+The Bronze tables document themselves. `describe_table` returns a table
+comment (what a row is, units, query hints), column comments and
+properties (`source_url`, `datetime.start`/`datetime.end`, `geo.bbox`,
+`geo.crs`, raster resolution and bands) that `scripts/bootstrap.py`
+writes from the data itself. Answer coverage, units, resolution and
+provenance questions from that output; run a query only for what depends
+on the participant's own area or thresholds. For depth beyond the
+properties, follow `source_url`.
+
 If `org_catalog` is empty or missing the workshop bronze tables, do
 not just report "it's empty" — follow the **Empty catalog** rule
 below to onboard the participant and offer to bootstrap.
@@ -144,7 +153,7 @@ bootstrap"**. Use it as an onboarding moment:
      — USFS CONUS wildfire burn probability + flame length rasters
 3. Offer to run the bootstrap:
    > *"I can kick off `python3 scripts/run_bootstrap.py` to load all
-   > seven bronze tables (a few minutes on Tiny; I run it once and poll), or I can keep explaining
+   > seven bronze tables (~8 min on Tiny, including their documentation; I run it once and poll), or I can keep explaining
    > what each dataset contains first. Which do you prefer?"*
 4. If they choose to bootstrap: run it, stream progress. If they want
    to learn first: describe each dataset's row semantics, typical use
@@ -287,7 +296,10 @@ data. The MCP's tool descriptions push the right order — follow them.
 Non-obvious and not enforced by the MCP:
 
 - `describe_table` every source before designing. Do not assume schemas from
-  documentation or dataset names.
+  documentation or dataset names. Read the properties too: `datetime.start`
+  and `datetime.end` are the coverage to check before proposing a window,
+  `geo.bbox` says whether the table covers the AOI, and the comment carries
+  the query hints (which classes mean water, which threshold means severe).
 - For rasters: sample `RS_Metadata(raster)` to confirm source CRS and pixel
   scale. Check band distributions via `SELECT DISTINCT band FROM ...`.
 - `generate_spatial_query_tool` and `submit_query_tool` are useful for
