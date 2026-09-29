@@ -13,3 +13,6 @@ tmp/screenshots/*.png
 !screenshots/*.png
 CLAUDE.md
 tmp/
+
+# Part 2 agent runtime state: pickles carry whatever the REPL held, including tokens
+part2_map_agent/repl_state/*.pkl
