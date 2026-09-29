@@ -9,7 +9,7 @@
 
 ## What You'll Build
 
-An end-to-end geospatial AI pipeline that scores **1,027,269 San Diego County buildings** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
+An end-to-end geospatial AI pipeline that scores **357,263 buildings in the City of San Diego** for wildfire, flood, and severe weather risk — then lets you explore them through natural language prompts that generate interactive maps.
 
 **Part 1 — Agentic Data Engineering** (~35 min)
 Walk through a Wherobots MCP-powered medallion pipeline (Bronze → Silver → Gold) that turns satellite imagery and weather events into per-building risk scores stored in Aurora PostgreSQL.
@@ -21,11 +21,11 @@ Run an AI agent that takes prompts like *"Show me buildings with high wildfire r
 
 ## The Data Story
 
-San Diego County sits at the intersection of three natural hazards:
+San Diego sits at the intersection of three natural hazards:
 
-- **Wildfire** — The eastern hills (Poway, Ramona, Cleveland National Forest edge) are the wildland-urban interface where the 2003 Cedar Fire and 2007 Witch Creek Fire devastated neighborhoods. **140 buildings** score as elevated wildfire risk (avg wildfire_factor: 0.62).
-- **Severe weather** — Santa Ana wind events and occasional hail affect **84% of all buildings** at some level.
-- **Flood** — Rare but catastrophic. A single building scores as the highest-risk asset in the entire dataset.
+- **Wildfire** — The canyon edges along Mission Trails Regional Park (Tierrasanta, San Carlos, Del Cerro) and Scripps Ranch, where the 2003 Cedar Fire destroyed hundreds of homes, are the city's wildland-urban interface. **97,412 buildings** (27%) carry some wildfire exposure; wildfire is what lifts a building from high to critical.
+- **Severe weather** — Radar-detected storm cells and hail within 25 km touch **99% of all buildings** at some level, and storm density is what separates the tiers inside the city.
+- **Flood** — Rare. In the December-to-March window no city footprint saw satellite-observed water, so the flood factor is zero for every building; at county scale 114 buildings did.
 
 The same building gets **different risk scores** depending on who's asking:
 - An **insurer** weights wildfire and flood equally (0.40/0.40) — they care about claims
@@ -140,7 +140,7 @@ The outputs table looks like this — `AuroraDSN`, `BedrockRoleArn`, `VpcId`, an
 >   -c "SELECT count(*) FROM workshop.insurance_exposure;"
 > ```
 >
-> Expect about 1.03M rows (the seed file holds 1,035,306; a fresh run of the notebooks on the current Overture release produces 1,027,269). If empty, the `AuroraSeed` Lambda log in CloudWatch will explain why.
+> Expect 357,263 rows once the seed has been regenerated from the City of San Diego run (the older seed file holds 1,035,306 county-scale rows). If empty, the `AuroraSeed` Lambda log in CloudWatch will explain why.
 
 > **Region note:** Everything in this workshop runs in `us-west-2` — Aurora,
 > Wherobots, and Bedrock. Make sure your Bedrock model access (above) is enabled
@@ -185,7 +185,7 @@ If you're using Kiro, install the Wherobots extension for integrated catalog bro
 > **Always open Kiro with `scripts/kiro.sh`** from the repo root. Kiro fills in the `${WHEROBOTS_API_KEY}`, `${FELT_API_TOKEN}` and `${AURORA_DSN}` placeholders in `.kiro/settings/mcp.json` from the environment it was started with, not from `.env`. Opening Kiro from the Dock leaves the placeholders unresolved and the MCP servers fail. `scripts/kiro.sh --check` shows which values `.env` provides. If the MCP servers panel shows nothing at all, check that **Kiro Agent: Configure MCP** is Enabled in Settings.
 
 To connect notebooks to Wherobots compute (needed for Part 1):
-1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Large** for `bronze-to-silver`, about 35 minutes for San Diego County; **Small** for `silver-to-gold`, about 6 minutes) → **Start**
+1. Wherobots sidebar → **Create Workspace** → set region and instance size (**Medium** for `bronze-to-silver`, about 13 minutes for the City of San Diego; **Small** for `silver-to-gold`, about 3 minutes; the county run needs **Large** and about 35 minutes) → **Start**
 2. Open a `.ipynb` file → select the Wherobots remote runtime as your kernel
 3. Code now executes on Wherobots Cloud (Sedona)
 
@@ -335,13 +335,13 @@ This shows actual hail events with location, severity, and timestamp.
 
 | Source | Catalog Table | Type | Description |
 |---|---|---|---|
-| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 2.5 billion footprints worldwide; ~1.03M in San Diego County |
+| Overture Buildings | `wherobots_open_data.overture_maps_foundation.buildings_building` | Vector | 2.5 billion footprints worldwide; ~357K in the City of San Diego, ~1.03M in the county |
 | USFS Burn Probability | `org_catalog.wildfire_risk.burn_probability_conus` | Raster | Annual burn probability grid, CONUS, 30 m (24 GB) |
 | USFS Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | Expected flame length if fire occurs, CONUS, 30 m (22 GB) |
 | OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR surface water / flood (30 m), Southern California, Dec 2025 – Mar 2026 |
-| NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | 25M hail detections, 2024–2025, with severity |
-| NOAA SWDI — Storm cell structure | `org_catalog.noaa_swdi.structure` | Vector | 81M radar-identified storm cells of any intensity (max reflectivity, VIL, cell heights), 2024–2025 |
-| NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | 91K tornado vortex signatures, 2024–2025 |
+| NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | 26M hail detections, 2024–2025, with severity |
+| NOAA SWDI — Storm cell structure | `org_catalog.noaa_swdi.structure` | Vector | 83M radar-identified storm cells of any intensity (max reflectivity, VIL, cell heights), 2024–2025 |
+| NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | 93K tornado vortex signatures, 2024–2025 |
 | NOAA SWDI — Warnings | `org_catalog.noaa_swdi.warn` | Vector | Warning polygons 2001–2016 (archive; not used by the pipeline) |
 
 ### Step 2 — Walkthrough: Bronze → Silver pipeline (10 min)
@@ -402,11 +402,11 @@ Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies
 | Moderate | 20th – 50th |
 | Low | bottom 20% |
 
-Tied scores are common (most buildings have zero flood and near-zero wildfire), so the realised shares deviate from these cuts at the bottom: in the San Diego County run, insurance lands at 5.0% critical, 15.0% high and 30.0% elevated as designed, but only 4.8% moderate and 45.2% low because most low-scoring buildings tie.
+Tied scores are common (most buildings have zero flood and near-zero wildfire), so the realised shares deviate from these cuts at the bottom: in the City of San Diego run, insurance lands at 5.0% critical as designed but only 2.2% high and 39.7% elevated, because most buildings in the middle of the distribution tie.
 
 **4. Derive** — Compute industry-specific metrics (e.g., `triage_priority`, `outage_probability`)
 
-**The weighting matters:** each industry also reads a different aspect of each hazard (insurance uses mean burn probability and flood duration; energy uses flame length and events within 5 km), so the rankings diverge. In the San Diego County run the insurer and the utility each flag about 50,000 critical buildings (51,364 and 49,272), but only **22,255** are critical for both; **10,951** of the insurer's critical buildings are low or moderate for the utility, and only a third of all buildings (334,191 of 1,027,269) land in the same tier under both lenses. Same data, different lens.
+**The weighting matters:** each industry also reads a different aspect of each hazard (insurance uses mean burn probability and flood duration; energy uses flame length and events within 5 km), so the rankings diverge. In the City of San Diego run the insurer flags 17,864 critical buildings and the utility 5,441, but only **725** are critical for both; **14,807** of the insurer's critical buildings are low or moderate for the utility, and only 13% of buildings (47,216 of 357,263) land in the same tier under both lenses. Same data, different lens.
 
 > 📖 See `part1_data_engineering/data_dictionary.md` for the full schema and business logic of every table.
 
@@ -431,10 +431,10 @@ conn.close()
 
 **Expected output:**
 ```
-workshop.insurance_exposure: 1,027,269 rows
-workshop.cre_risk: 1,027,269 rows
-workshop.capital_markets_signals: 1,027,269 rows
-workshop.energy_asset_risk: 1,027,269 rows
+workshop.insurance_exposure: 357,263 rows
+workshop.cre_risk: 357,263 rows
+workshop.capital_markets_signals: 357,263 rows
+workshop.energy_asset_risk: 357,263 rows
 ```
 
 **Explore the risk distribution:**
@@ -447,17 +447,18 @@ You should see:
 
 | Tier | Buildings | Avg Score | Dominant Driver |
 |------|----------|-----------|-----------------|
-| critical | 51,364 | 0.327 | Wildfire (avg factor 0.38, vs 0.04 or less in every other tier) on top of high storm density |
-| high | 154,090 | 0.202 | Severe weather density (0.93) |
-| elevated | 308,181 | 0.175 | Severe weather density |
-| moderate | 49,249 | 0.160 | Severe weather density |
-| low | 464,385 | 0.154 | Lower storm density; wildfire and flood zero |
+| critical | 17,864 | 0.203 | Storm density (0.87) plus the wildfire edge (avg factor 0.07, ten times any other tier) |
+| high | 8,013 | 0.172 | Storm density (0.85) |
+| elevated | 141,719 | 0.170 | Storm density (0.84) |
+| moderate | 103,052 | 0.136 | Storm density (0.67) |
+| low | 86,615 | 0.102 | Lower storm density (0.50); wildfire and flood zero |
 
 **What to notice:**
-- **Wildfire is what puts a building in the critical tier.** The critical tier's average wildfire factor is 0.38; no other tier is above 0.04. Storm density is high everywhere (0.77 to 0.93), so it separates high from low but not critical from high. Flood is zero in every tier: only a few thousand of 17 million building-weeks showed satellite-observed water
-- **Risk is localized at the wildland-urban interface.** Within 3 km of Ramona, all 6,664 buildings are high or critical; Julian 84%; Scripps Ranch 51%; Poway 21%; downtown San Diego 0 of 12,874. This is where the 2003 Cedar Fire and 2007 Witch Creek Fire burned
-- **20% of the county is high or critical by construction** (205,454 buildings), because tiers are percentile ranks; the story is *where* they are, not how many
-- Different industry tables weight the **same hazards differently** and read different metrics — only a third of buildings share a tier between insurance and energy
+- **Storm density drives the tiers inside the city.** The severe-weather factor climbs from 0.50 in the low tier to 0.87 in critical, and 355,244 of 357,263 buildings have some storm exposure. Wildfire is small in absolute terms but is what separates critical from high (0.072 against 0.007). Flood is zero for every building: no city footprint saw satellite-observed water between December and March
+- **Risk is localized along the canyon edges.** Within 3 km of Tierrasanta and of San Carlos and Del Cerro, along Mission Trails Regional Park, about 48% of buildings are high or critical; Scripps Ranch, where the 2003 Cedar Fire burned, 25%; downtown 2.3%; Rancho Bernardo none
+- **7% of the city is high or critical** (25,877 buildings), not the 20% the percentile cuts promise, because tied scores collapse the high tier; the story is *where* they are, not how many
+- Different industry tables weight the **same hazards differently** and read different metrics — only 13% of buildings share a tier between insurance and energy
+- Tiers are **relative to the AOI you ran**. At county scale the eastern wildland-urban interface (Ramona, Julian) takes the top tier and the city's canyon edges move down the ranking. Same data, different frame
 
 > **Try it:** *"Query workshop-db: what are the top 10 buildings by risk_score in workshop.insurance_exposure? Show asset_id, risk_score, wildfire_factor, flood_factor, and severe_weather_factor"*
 
@@ -468,7 +469,7 @@ You should see:
 - **Spatial operations** (zonal stats, KNN joins) run server-side on Apache Sedona — even billions of rows
 - **JDBC export** moves Gold tables directly from Wherobots to Aurora in minutes
 - The same data pipeline supports **4 different industry verticals** with different scoring weights from identical source data
-- The risk story is **localized**: every building around Ramona scores high or critical, none downtown does, and wildfire is the factor that decides it
+- The risk story is **localized**: half the buildings along Mission Trails score high or critical, almost none downtown do, and storm density with a wildfire edge is what decides it
 
 ---
 
@@ -570,33 +571,33 @@ Start the agent in **interactive mode**:
 
 The agent will prompt you for what to map. Try this first prompt — it builds a single-layer **triage map** of the buildings an underwriter should look at first:
 
-> **Suggested prompt:** *"As an insurance underwriter, map the high and critical risk buildings across San Diego County on a dark basemap, colored by risk tier — red for high, dark red for critical."*
+> **Suggested prompt:** *"As an insurance underwriter, map the high and critical risk buildings across San Diego on a dark basemap, colored by risk tier — red for high, dark red for critical."*
 
 **What happens behind the scenes (MCP tool calls):**
 1. `list_data_sources` → finds the Aurora PostgreSQL connection
-2. `create_map` → creates a new Felt map over San Diego County on a dark basemap
+2. `create_map` → creates a new Felt map over San Diego on a dark basemap
 3. `create_layer_from_data_source` → SQL query for the high + critical risk buildings
 4. `poll_layer_processing_status` → waits for the layer to finish
 5. `generate_fsl` → builds a categorical style for `risk_tier`
 6. `update_layer_properties` → applies the style
 7. `render_map` → shows inline preview + returns URL
 
-**What you'll see:** 21,501 buildings — and they rake across the **eastern backcountry** (Poway, Ramona, Julian), the wildland-urban interface, *not* the coast. The serious hazard sits at the county's edges: the inland critical (dark-red) buildings are wildfire-driven, while closer to the coast risk leans more on flood and severe weather. Wildfire is the escalator that pushes a building into the critical tier.
+**What you'll see:** 25,877 buildings — and they cluster along the **canyon edges** (Tierrasanta, San Carlos and Del Cerro along Mission Trails Regional Park; Scripps Ranch), *not* the coast or downtown. The critical (dark-red) buildings carry the wildfire edge on top of the city's high storm density; the high (red) ones are storm density alone. Wildfire is the escalator that pushes a building into the critical tier.
 
 | Risk Tier | Count | On this map |
 |-----------|------:|:-----------:|
-| Critical  | 2,385 | 🟥 yes |
-| High      | 19,116 | 🔴 yes |
-| Elevated  | 66,271 | — |
-| Moderate  | 920,415 | — |
-| Low       | 27,119 | — |
+| Critical  | 17,864 | 🟥 yes |
+| High      | 8,013 | 🔴 yes |
+| Elevated  | 141,719 | — |
+| Moderate  | 103,052 | — |
+| Low       | 86,615 | — |
 
-Of ~1M buildings, only **21,501 (2%)** land in the high/critical tiers — that focus is the point of a triage map.
+Of 357,263 buildings, only **25,877 (7%)** land in the high/critical tiers — that focus is the point of a triage map.
 
-> **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs as you move inland.
+> **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs toward the canyons.
 
 <p>
-  <img src="screenshots/step2-1-buildings-map.png" width="49%" alt="High & critical risk buildings across San Diego County, colored by risk tier" />
+  <img src="screenshots/step2-1-buildings-map.png" width="49%" alt="High & critical risk buildings across San Diego, colored by risk tier" />
   <img src="screenshots/step2-2-building-popup.png" width="49%" alt="Building popup — risk score and the wildfire / flood / severe-weather factors" />
 </p>
 
