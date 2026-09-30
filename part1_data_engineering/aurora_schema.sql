@@ -30,7 +30,7 @@ CREATE TABLE workshop.scoring_config (
 
 CREATE TABLE workshop.insurance_exposure (
     asset_id              TEXT PRIMARY KEY,
-    geometry              GEOMETRY(Polygon, 4326) NOT NULL,
+    geometry              GEOMETRY(Geometry, 4326) NOT NULL,
     building_class        TEXT,
     wildfire_factor       DOUBLE PRECISION,
     flood_factor          DOUBLE PRECISION,
@@ -53,7 +53,7 @@ CREATE INDEX idx_insurance_exposure_risk ON workshop.insurance_exposure(risk_tie
 
 CREATE TABLE workshop.cre_risk (
     asset_id                  TEXT PRIMARY KEY,
-    geometry                  GEOMETRY(Polygon, 4326) NOT NULL,
+    geometry                  GEOMETRY(Geometry, 4326) NOT NULL,
     building_class            TEXT,
     wildfire_factor           DOUBLE PRECISION,
     flood_factor              DOUBLE PRECISION,
@@ -74,12 +74,13 @@ CREATE INDEX idx_cre_risk_screen ON workshop.cre_risk(acquisition_screen_flag);
 
 CREATE TABLE workshop.capital_markets_signals (
     asset_id                   TEXT PRIMARY KEY,
-    geometry                   GEOMETRY(Polygon, 4326) NOT NULL,
+    geometry                   GEOMETRY(Geometry, 4326) NOT NULL,
     building_class             TEXT,
     wildfire_factor            DOUBLE PRECISION,
     flood_factor               DOUBLE PRECISION,
     severe_weather_factor      DOUBLE PRECISION,
     risk_score                 DOUBLE PRECISION NOT NULL,
+    risk_tier                  TEXT NOT NULL,
     disruption_signal          DOUBLE PRECISION,
     supply_chain_vulnerability DOUBLE PRECISION,
     event_density_signal       DOUBLE PRECISION,
@@ -89,7 +90,7 @@ CREATE TABLE workshop.capital_markets_signals (
     computed_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_capital_markets_geom ON workshop.capital_markets_signals USING GIST(geometry);
+CREATE INDEX idx_capital_markets_signals_geom ON workshop.capital_markets_signals USING GIST(geometry);
 
 -- ── Energy & Utilities Asset Risk ────────────────────────────────────────────
 -- NOTE: Scores building footprints as a proxy for energy-adjacent assets.
@@ -97,7 +98,7 @@ CREATE INDEX idx_capital_markets_geom ON workshop.capital_markets_signals USING 
 
 CREATE TABLE workshop.energy_asset_risk (
     asset_id                 TEXT PRIMARY KEY,
-    geometry                 GEOMETRY(Polygon, 4326) NOT NULL,
+    geometry                 GEOMETRY(Geometry, 4326) NOT NULL,
     building_class           TEXT,
     wildfire_factor          DOUBLE PRECISION,
     flood_factor             DOUBLE PRECISION,
@@ -111,4 +112,4 @@ CREATE TABLE workshop.energy_asset_risk (
     computed_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_energy_asset_geom ON workshop.energy_asset_risk USING GIST(geometry);
+CREATE INDEX idx_energy_asset_risk_geom ON workshop.energy_asset_risk USING GIST(geometry);

@@ -5,7 +5,19 @@
       "type": "http",
       "headers": {
         "x-api-key": "${WHEROBOTS_API_KEY}"
-      }
+      },
+      "autoApprove": [
+        "list_catalogs_tool",
+        "list_databases_tool",
+        "list_tables_tool",
+        "describe_table_tool",
+        "search_documentation_tool",
+        "generate_spatial_query_tool",
+        "submit_query_tool",
+        "get_query_status_tool",
+        "get_query_results_tool",
+        "cancel_query_tool"
+      ]
     },
     "felt": {
       "url": "https://felt.com/mcp",
@@ -23,7 +35,10 @@
       ],
       "env": {
         "AURORA_DSN": "${AURORA_DSN}"
-      }
+      },
+      "autoApprove": [
+        "query"
+      ]
     }
   }
 }

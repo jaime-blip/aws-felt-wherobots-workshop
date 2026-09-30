@@ -60,7 +60,7 @@ NS_WILDFIRE = "org_catalog.wildfire_risk"
 # Raster chip size (matches the sedona-native pattern in bronze-to-silver)
 TILE_SIZE = 128
 
-# SWDI scope — workshop's WEATHER_WINDOW runs 2025-01-01 → 2026-03-25.
+# SWDI scope — the annual files end 2025-12-31, and the workshop's WEATHER_WINDOW ends there too.
 # 2024 is included as a buffer year for participants who want to widen the
 # silver-to-gold window post-workshop. 2026 annual rollup isn't published yet
 # (NOAA releases annual files ~2 months after year-end).
@@ -85,8 +85,10 @@ config = (
         "spark.hadoop.fs.s3a.bucket.wherobots-examples.aws.credentials.provider",
         "org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider",
     )
+    .config("spark.ui.showConsoleProgress", "false")
     .getOrCreate()
 )
+config.sparkContext.setLogLevel("ERROR")  # participants read this log; keep it to our own progress lines and real errors
 sedona = SedonaContext.create(config)
 
 
@@ -197,6 +199,10 @@ warn_df = (
     .withColumn("POLYGON", fix_wkt(col("POLYGON")))
     .withColumn("geometry", expr("ST_GeomFromText(POLYGON)"))
     .drop("POLYGON")
+    # A handful of source polygons survive the WKT repair with coordinates far
+    # outside any NWS forecast area (east of 60 W, south of 15 N); drop them so
+    # the table's extent means something.
+    .filter("ST_XMin(geometry) >= -180 AND ST_XMax(geometry) <= -60 AND ST_YMin(geometry) >= 15 AND ST_YMax(geometry) <= 72")
 )
 warn_table = f"{NS_NOAA}.warn"
 warn_df.writeTo(warn_table).createOrReplace()

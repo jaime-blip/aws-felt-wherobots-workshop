@@ -37,7 +37,7 @@ These are catalog-registered datasets consumed directly from Wherobots Open Data
 | USFS Conditional Flame Length | `org_catalog.wildfire_risk.conditional_flame_length_conus` | Raster | CONUS-wide conditional flame length grids from USFS (expected flame length if fire occurs) |
 | OPERA DSWx-S1 | `org_catalog.opera.dswx_s1` | Raster | Sentinel-1 SAR-derived surface water / flood classification (30 m, per-acquisition) |
 | NOAA SWDI — Hail | `org_catalog.noaa_swdi.hail` | Vector | Hail event reports with severity probability and max hail size |
-| NOAA SWDI — Mesocyclone Structures | `org_catalog.noaa_swdi.structure` | Vector | Mesocyclone structure detections with max reflectivity and VIL |
+| NOAA SWDI — Storm cell structure | `org_catalog.noaa_swdi.structure` | Vector | Radar-identified storm cells of any intensity, with max reflectivity, VIL and cell base/top heights (NEXRAD storm cell structure product; not mesocyclones) |
 | NOAA SWDI — TVS | `org_catalog.noaa_swdi.tvs` | Vector | Tornado Vortex Signature detections with max delta velocity and max shear |
 
 ### Scope Filters Applied at Ingestion
@@ -93,7 +93,7 @@ Per-building, **per-ISO-week** flood exposure derived from OPERA DSWx-S1 SAR flo
 | `asset_type` | Always `building` |
 | `geometry` | Building footprint polygon |
 | `flood_week` | Monday-aligned ISO week start date for this observation |
-| `flood_max_wtr_class` | Max OPERA water classification observed that week (0=dry, 1=open water, 2=partial surface water) |
+| `flood_max_wtr_class` | Max OPERA B01_WTR water class observed that week (0=not water, 1=open water, 3=inundated vegetation); terrain-mask and no-data pixels are excluded |
 | `observation_window_start` | `FLOOD_WINDOW_START` — pipeline parameter |
 | `observation_window_end` | `FLOOD_WINDOW_END` — pipeline parameter |
 | `computed_at` | Processing timestamp |
@@ -115,10 +115,10 @@ Per-building severe weather proximity and density derived from NOAA SWDI via KNN
 | `event_count_25km` | Total severe weather events within 25 km |
 | `nearest_event_dist_m` | Distance to the single nearest event of any type (meters) |
 | `nearest_hail_m` | Distance to the nearest hail event (meters) |
-| `nearest_structure_m` | Distance to the nearest mesocyclone structure event (meters) |
+| `nearest_structure_m` | Distance to the nearest radar-identified storm cell (meters) |
 | `nearest_tvs_m` | Distance to the nearest TVS event (meters) |
 | `hail_count_25km` | Hail events within 25 km |
-| `structure_count_25km` | Mesocyclone structure events within 25 km |
+| `structure_count_25km` | Radar-identified storm cells within 25 km, of any intensity |
 | `tvs_count_25km` | TVS events within 25 km |
 | `max_severity` | Maximum severity value across all matched events |
 | `observation_window_start` | `WEATHER_WINDOW_START` — pipeline parameter |
@@ -233,15 +233,16 @@ Target audience: Quantitative analysts, equity researchers, supply chain risk te
 | `asset_id`, `geometry`, `building_class` | Asset identifiers |
 | `wildfire_factor`, `flood_factor`, `severe_weather_factor` | Normalized [0–1] hazard factors |
 | `risk_score` | Weighted composite (wf 0.20, fl 0.30, sw 0.50) |
-| `disruption_probability` | Modeled likelihood of facility going offline |
-| `supply_chain_vulnerability` | Proximity-weighted risk index |
-| `event_signal_strength` | Intensity of current severe weather conditions |
+| `risk_tier` | Percentile-rank tier: critical / high / elevated / moderate / low (same rule as the other Gold tables) |
+| `disruption_signal` | Relative likelihood of a facility going offline (ranking signal, not a calibrated probability) |
+| `supply_chain_vulnerability` | Proximity-weighted risk index, bounded [0, 1] |
+| `event_density_signal` | Geometric mean of the severe weather factor and proximity |
 | `score_explanation` | JSON breakdown of factor weights and values |
 
 **Business logic**:
-- `disruption_probability` = sigmoid function: `1 / (1 + e^(-10 × (risk_score - 0.5)))` — maps the linear risk score to a probability curve centered at 0.5
-- `supply_chain_vulnerability` = `1 / log(1 + nearest_event_km)` — inverse-log distance weighting where closer events produce higher vulnerability; uses geodesic distance converted from meters to km
-- `event_signal_strength` = the normalized severe weather factor (0–1), representing how anomalous current weather conditions are relative to the population
+- `disruption_signal` = sigmoid function: `1 / (1 + e^(-10 × (risk_score - 0.5)))` — maps the linear risk score to an S-curve centered at 0.5
+- `supply_chain_vulnerability` = `min(1, 1 / log(1 + nearest_event_km))` — inverse-log distance weighting where closer events produce higher vulnerability; uses geodesic distance converted from meters to km
+- `event_density_signal` = `sqrt(severe_weather_factor × supply_chain_vulnerability)`
 
 ---
 
@@ -274,5 +275,5 @@ Each Gold table is written to three destinations:
 | Destination | Format | Path / Location |
 |---|---|---|
 | Wherobots Iceberg | Apache Iceberg | `org_catalog.gold.<table_name>` |
-| S3 GeoParquet | GeoParquet | `s3://wbts-wbc-ew4bgi08zb/w23vimqmu7/data/shared/gold/<table_name>` |
+| S3 GeoParquet (optional) | GeoParquet | `GEOPARQUET_BASE/<table_name>` — off by default; set `GEOPARQUET_BASE` in the silver-to-gold config cell to a folder in your org's Wherobots managed storage to enable |
 | Aurora PostgreSQL | JDBC / PostGIS | `workshop.<table_name>` (geometries stored as WKT) |
