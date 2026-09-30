@@ -380,7 +380,7 @@ Open the notebook at `part1_data_engineering/silver-to-gold.ipynb`. This applies
 > python3 scripts/upload_env_to_wherobots.py
 > ```
 >
-> This uploads only the `AURORA_DSN` line to your org's Wherobots managed storage and points the notebook's config cell at it. Without it the config cell stops with a clear error, the 4 Gold tables never land in Aurora, and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
+> This uploads only the `AURORA_DSN` line to your Wherobots managed storage, where the notebook's config cell finds it through the `USER_S3_PATH` variable Wherobots sets on every runtime; nothing in the notebook is edited. Without it the config cell stops with a clear error, the 4 Gold tables never land in Aurora, and Part 2 only sees the CloudFormation-seeded `insurance_exposure`.
 
 **1. Normalize** — Min-max scale each hazard metric to [0, 1]
 **2. Weight** — Apply industry-specific weights:

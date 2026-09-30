@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Upload the AURORA_DSN line of the workshop .env to your org's Wherobots managed
-storage, where a remote notebook kernel can read it, and point
-silver-to-gold.ipynb at it (MANAGED_ENV_URI in the config cell).
+Upload the AURORA_DSN line of the workshop .env to your Wherobots managed
+storage, where a remote notebook kernel can read it. silver-to-gold.ipynb finds
+the file through USER_S3_PATH, which Wherobots sets on every runtime, so nothing
+in the notebook needs editing.
 
 The silver-to-gold notebook's config cell resolves the Aurora connection from,
 in order: the AURORA_DSN environment variable, a .env in the kernel's working
@@ -14,8 +15,8 @@ Usage (from the repo root, after filling in .env):
     set -a; source .env; set +a
     python3 scripts/upload_env_to_wherobots.py [path/to/.env] [--dry-run]
 
-Only the AURORA_DSN line is uploaded. --dry-run prints the destination and the
-notebook change it would make, and writes nothing.
+Only the AURORA_DSN line is uploaded. --dry-run prints the destination and
+uploads nothing.
 """
 import json
 import os
@@ -28,7 +29,6 @@ import urllib.request
 API = "https://api.cloud.wherobots.com"
 SUBPATH = "aws-felt-wherobots-workshop/workshop.env"  # no leading dot: Spark ignores hidden files
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NOTEBOOK = os.path.join(REPO, "part1_data_engineering", "silver-to-gold.ipynb")
 DRY_RUN = "--dry-run" in sys.argv
 ARGS = [a for a in sys.argv[1:] if a != "--dry-run"]
 
@@ -93,22 +93,4 @@ else:
     if code != "200":
         sys.exit(f"upload failed: HTTP {code} {r.stderr.strip()}")
     print(f"uploaded AURORA_DSN line to {destination}")
-
-# Point the Gold notebook at the uploaded file (config cell: MANAGED_ENV_URI = ...)
-import json, re
-nb = json.load(open(NOTEBOOK, encoding="utf-8"))
-patched = False
-for cell in nb["cells"]:
-    if cell["cell_type"] != "code":
-        continue
-    for i, line in enumerate(cell["source"]):
-        if line.startswith("MANAGED_ENV_URI = "):
-            cell["source"][i] = re.sub(r"^MANAGED_ENV_URI = .*?(  #.*)?$", lambda m: f'MANAGED_ENV_URI = "{destination}"{m.group(1) or ""}', line.rstrip("\n")) + "\n"
-            patched = True
-assert patched, "MANAGED_ENV_URI line not found in silver-to-gold.ipynb"
-if DRY_RUN:
-    print(f"dry run: would set MANAGED_ENV_URI in silver-to-gold.ipynb to {destination}")
-else:
-    with open(NOTEBOOK, "w", encoding="utf-8") as f:
-        f.write(json.dumps(nb, indent=1, sort_keys=True, ensure_ascii=True) + "\n")
-    print(f"silver-to-gold.ipynb: MANAGED_ENV_URI set to {destination}")
+print("silver-to-gold.ipynb reads it through USER_S3_PATH; nothing to edit.")

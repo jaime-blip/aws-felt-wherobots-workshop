@@ -86,8 +86,9 @@ Wherobots Cloud and cannot see the participant's laptop environment or
     set -a; source .env; set +a
     python3 scripts/upload_env_to_wherobots.py
 
-It uploads only the `AURORA_DSN` line to their org's managed storage and
-points the notebook at it. Never tell a participant to "set AURORA_DSN in
+It uploads only the `AURORA_DSN` line to their managed storage; the notebook
+finds it through `USER_S3_PATH`, which Wherobots sets on every runtime, so
+nothing in the notebook is edited. Never tell a participant to "set AURORA_DSN in
 your environment" for a remote kernel; it has no effect there.
 
 **Reporting Gold completion — one row per industry, same shape.**
