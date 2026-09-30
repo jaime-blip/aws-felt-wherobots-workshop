@@ -17,7 +17,7 @@ distinguished by filename suffix:
 
 | Band suffix | Meaning | Use in Silver |
 |---|---|---|
-| `B01_WTR`  | Water classification (0=dry, 1=open water, 2=partial surface water) | **Primary** — use this for flood exposure |
+| `B01_WTR`  | Water classification: 0=not water, 1=open water, 3=inundated vegetation; 250=HAND mask (ground too high above the nearest drainage for water to be plausible, so not evaluated), 251=radar layover/shadow mask (terrain blocked the view), 255=no data | **Primary** — use this for flood exposure; only 1 and 3 mean water, 250 and 251 mean not observed |
 | `B02_BWTR` | Binary water mask | Incremental signal beyond B01; rarely needed |
 | `B03_CONF` | Classification confidence | Confidence-weighting variant only |
 | `B04_DIAG` | Diagnostic layer | Debugging / QA — do not ingest into Silver |
