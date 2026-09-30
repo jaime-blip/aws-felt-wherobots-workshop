@@ -569,35 +569,37 @@ Start the agent in **interactive mode**:
 ./run.sh
 ```
 
+> **Which data will you see?** Aurora starts seeded with a San Diego **County** run (about 1.03M buildings), which is what this section describes. If you completed Part 1, your Gold run replaced those tables with your **City of San Diego** results (357,263 buildings), so your maps will show the city and smaller counts than the ones below.
+
 The agent will prompt you for what to map. Try this first prompt — it builds a single-layer **triage map** of the buildings an underwriter should look at first:
 
-> **Suggested prompt:** *"As an insurance underwriter, map the high and critical risk buildings across San Diego on a dark basemap, colored by risk tier — red for high, dark red for critical."*
+> **Suggested prompt:** *"As an insurance underwriter, map the high and critical risk buildings across San Diego County on a dark basemap, colored by risk tier — red for high, dark red for critical."*
 
 **What happens behind the scenes (MCP tool calls):**
 1. `list_data_sources` → finds the Aurora PostgreSQL connection
-2. `create_map` → creates a new Felt map over San Diego on a dark basemap
+2. `create_map` → creates a new Felt map over San Diego County on a dark basemap
 3. `create_layer_from_data_source` → SQL query for the high + critical risk buildings
 4. `poll_layer_processing_status` → waits for the layer to finish
 5. `generate_fsl` → builds a categorical style for `risk_tier`
 6. `update_layer_properties` → applies the style
 7. `render_map` → shows inline preview + returns URL
 
-**What you'll see:** 25,877 buildings — and they cluster along the **canyon edges** (Tierrasanta, San Carlos and Del Cerro along Mission Trails Regional Park; Scripps Ranch), *not* the coast or downtown. The critical (dark-red) buildings carry the wildfire edge on top of the city's high storm density; the high (red) ones are storm density alone. Wildfire is the escalator that pushes a building into the critical tier.
+**What you'll see:** 21,501 buildings — and they rake across the **eastern backcountry** (Poway, Ramona, Julian), the wildland-urban interface, *not* the coast. The serious hazard sits at the county's edges: the inland critical (dark-red) buildings are wildfire-driven, while closer to the coast risk leans more on flood and severe weather. Wildfire is the escalator that pushes a building into the critical tier.
 
 | Risk Tier | Count | On this map |
 |-----------|------:|:-----------:|
-| Critical  | 17,864 | 🟥 yes |
-| High      | 8,013 | 🔴 yes |
-| Elevated  | 141,719 | — |
-| Moderate  | 103,052 | — |
-| Low       | 86,615 | — |
+| Critical  | 2,385 | 🟥 yes |
+| High      | 19,116 | 🔴 yes |
+| Elevated  | 66,271 | — |
+| Moderate  | 920,415 | — |
+| Low       | 27,119 | — |
 
-Of 357,263 buildings, only **25,877 (7%)** land in the high/critical tiers — that focus is the point of a triage map.
+Of ~1M buildings, only **21,501 (2%)** land in the high/critical tiers — that focus is the point of a triage map.
 
-> **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs toward the canyons.
+> **Tip:** Want to see what's driving each building's score? Ask the agent a follow-up: *"add a popup showing risk score and the wildfire, flood, and severe-weather factors."* Notice how wildfire climbs as you move inland.
 
 <p>
-  <img src="screenshots/step2-1-buildings-map.png" width="49%" alt="High & critical risk buildings across San Diego, colored by risk tier" />
+  <img src="screenshots/step2-1-buildings-map.png" width="49%" alt="High & critical risk buildings across San Diego County, colored by risk tier" />
   <img src="screenshots/step2-2-building-popup.png" width="49%" alt="Building popup — risk score and the wildfire / flood / severe-weather factors" />
 </p>
 
