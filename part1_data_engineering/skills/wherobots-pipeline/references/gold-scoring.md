@@ -49,7 +49,7 @@ INDUSTRY_FACTORS = {
     "commercial_real_estate": {
         "wildfire_factor":       "burn_prob_max",
         "flood_factor":          "flood_max_wtr_class",
-        "severe_weather_factor": "nearest_event_dist_m",  # will be inverted in normalization
+        "severe_weather_factor": "inv_nearest_event_dist",  # computed in Gold as 1/log1p(km)
     },
     "capital_markets": {
         "wildfire_factor":       "burn_prob_mean",
@@ -63,6 +63,21 @@ INDUSTRY_FACTORS = {
     },
 }
 ```
+
+### Shipped default weights (wildfire / flood / severe weather)
+
+The reference notebook scores all four industries in one run with these
+`SCORING_WEIGHTS`; quote them, do not guess or call them even thirds.
+
+| Selector | Wildfire | Flood | Severe weather |
+|---|---|---|---|
+| `insurance` | 0.40 | 0.40 | 0.20 |
+| `commercial_real_estate` | 0.30 | 0.35 | 0.35 |
+| `capital_markets` | 0.20 | 0.30 | 0.50 |
+| `energy_utilities` | 0.40 | 0.20 | 0.40 |
+
+These four keys are the only selectors; a participant's "commercial insurance"
+maps to `insurance` and "grid" or "utility" to `energy_utilities`.
 
 Use a helper function to map each industry's `norm_*` columns into the
 three factor slots, compute the weighted composite, and assign the tier:
